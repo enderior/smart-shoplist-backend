@@ -1,0 +1,43 @@
+# Виртуальное окружение (весь backend/.venv)
+backend/.venv/
+.venv/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+
+# Переменные окружения (секреты)
+.env
+backend/.env
+*.env
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# База данных
+*.db
+*.sqlite3
+*.sqlite
+
+# Логи
+*.log
+logs/
+
+# Системные файлы
+.DS_Store
+Thumbs.db
+
+# Временные файлы
+*.tmp
+*.bak
