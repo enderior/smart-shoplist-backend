@@ -7,7 +7,7 @@
 - FastAPI
 - SQLAlchemy
 - PostgreSQL
-- Pydantic v1
+- Pydantic
 - JWT аутентификация
 
 ## Запуск
