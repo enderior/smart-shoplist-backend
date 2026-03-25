@@ -1,5 +1,9 @@
-from fastapi import FastAPI
+﻿from fastapi import FastAPI
 from app.core.config import settings
+from app.core.database import engine, Base
+
+# Создаём таблицы в базе данных (временно, для разработки)
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
