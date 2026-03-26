@@ -1,21 +1,30 @@
-﻿from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+﻿from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker, declarative_base
+from app.core.config import settings
 
-# Пока используем SQLite для разработки
-DATABASE_URL = "sqlite:///./smartlist.db"
+DATABASE_URL = settings.DATABASE_URL
 
-engine = create_engine(
+engine = create_async_engine(
     DATABASE_URL,
-    connect_args={"check_same_thread": False}
+    echo=True,  # включает логи SQL (полезно для отладки)
+    future=True
 )
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+AsyncSessionLocal = sessionmaker(
+    engine,
+    class_=AsyncSession,
+    expire_on_commit=False
+)
 
 Base = declarative_base()
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+async def get_db():
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+        finally:
+            await session.close()
