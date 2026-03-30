@@ -2,13 +2,11 @@
 from contextlib import asynccontextmanager
 from app.core.config import settings
 from app.core.database import engine, Base
-
-# 👇 ВАЖНО: импортируем модели, чтобы Base знал о них
 from app.models import User, ShoppingList, ListItem
+from app.api.v1.endpoints import users  # 👈 ДОБАВИТЬ
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: создаём таблицы
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield
@@ -20,6 +18,9 @@ app = FastAPI(
     debug=settings.DEBUG,
     lifespan=lifespan
 )
+
+# Подключаем роутеры
+app.include_router(users.router)  # 👈 ДОБАВИТЬ
 
 @app.get("/")
 async def root():
