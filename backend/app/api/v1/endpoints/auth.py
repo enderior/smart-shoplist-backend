@@ -44,7 +44,6 @@ async def register(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
     return {"message": "Пользователь успешно зарегистрирован", "user_id": new_user.id}
 
 
-# 👇 ИЗМЕНЁННЫЙ ЭНДПОИНТ /login (поддерживает form-data)
 @router.post("/login", response_model=Token)
 async def login(
         form_data: OAuth2PasswordRequestForm = Depends(),

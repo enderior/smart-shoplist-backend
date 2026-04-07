@@ -8,7 +8,6 @@ from app.schemas.user import UserResponse
 
 router = APIRouter(prefix="/users", tags=["users"])
 
-# 👇 ЭТОТ ЭНДПОИНТ ДОЛЖЕН БЫТЬ ПЕРВЫМ!
 @router.get("/me", response_model=UserResponse)
 async def get_me(current_user: User = Depends(get_current_active_user)):
     """Возвращает информацию о текущем авторизованном пользователе."""
