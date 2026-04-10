@@ -44,8 +44,8 @@ class ShoppingListResponse(ShoppingListBase):
     owner_id: int
     is_archived: bool
     created_at: datetime
-    updated_at: datetime
-    items: List[ListItemResponse] = []
+    updated_at: Optional[datetime] = None
+    items: Optional[List[ListItemResponse]] = None
     
     class Config:
         from_attributes = True

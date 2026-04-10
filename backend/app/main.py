@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from app.core.config import settings
 from app.core.database import engine, Base
 from app.models import User, ShoppingList, ListItem
-from app.api.v1.endpoints import users, auth  # <-- ДОБАВИТЬ ИМПОРТ auth
+from app.api.v1.endpoints import users, auth, lists
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -21,7 +21,8 @@ app = FastAPI(
 
 # Подключаем роутеры
 app.include_router(users.router)
-app.include_router(auth.router)  # <-- ДОБАВИТЬ ПОДКЛЮЧЕНИЕ
+app.include_router(auth.router)
+app.include_router(lists.router)
 
 @app.get("/")
 async def root():
