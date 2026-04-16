@@ -64,3 +64,47 @@ async def test_purchase_history_after_completion(client: AsyncClient):
     history = history_resp.json()
     assert len(history) == 1
     assert history[0]["product_name"] == "Молоко"
+
+@pytest.mark.asyncio
+async def test_purchase_history_pagination(client: AsyncClient):
+    # Регистрация
+    await client.post("/auth/register", json={
+        "email": "pagin@example.com",
+        "username": "paginuser",
+        "password": "pass"
+    })
+    login_resp = await client.post("/auth/login", data={
+        "username": "pagin@example.com",
+        "password": "pass"
+    })
+    token = login_resp.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Создать список
+    list_resp = await client.post("/lists/", json={"title": "Пагинация"}, headers=headers)
+    list_id = list_resp.json()["id"]
+
+    # Добавить 5 товаров и отметить их купленными
+    item_ids = []
+    for i in range(5):
+        item = await client.post(f"/lists/{list_id}/items", json={"name": f"Товар {i}"}, headers=headers)
+        item_id = item.json()["id"]
+        item_ids.append(item_id)
+        await client.put(f"/lists/items/{item_id}", json={"is_completed": True}, headers=headers)
+
+    # Запросить первые 2 записи
+    resp1 = await client.get("/purchase-history/?skip=0&limit=2", headers=headers)
+    assert resp1.status_code == 200
+    data1 = resp1.json()
+    assert len(data1) == 2
+
+    # Запросить следующие 2 (skip=2)
+    resp2 = await client.get("/purchase-history/?skip=2&limit=2", headers=headers)
+    assert resp2.status_code == 200
+    data2 = resp2.json()
+    assert len(data2) == 2
+
+    # Убедиться, что записи не пересекаются
+    ids1 = {item["id"] for item in data1}
+    ids2 = {item["id"] for item in data2}
+    assert ids1.isdisjoint(ids2)
