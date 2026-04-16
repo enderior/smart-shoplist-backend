@@ -1,7 +1,9 @@
 # Smart ShopList Backend
 
 Бэкенд для «умного» списка покупок на **FastAPI**.  
-Проект поддерживает JWT-аутентификацию, управление списками и товарами, историю покупок, а также базовые «умные» рекомендации (на основе статического словаря и истории пользователя).
+Поддерживает JWT-аутентификацию, управление списками и товарами, историю покупок, а также базовые «умные» рекомендации (на основе статического словаря и истории пользователя).
+
+[![Run tests](https://github.com/enderior/smart-shoplist-backend/actions/workflows/tests.yml/badge.svg)](https://github.com/enderior/smart-shoplist-backend/actions/workflows/tests.yml)
 
 ## 📋 Содержание
 
@@ -10,8 +12,8 @@
 - [API Эндпоинты](#api-эндпоинты)
 - [Схема базы данных](#схема-базы-данных)
 - [Тестирование](#тестирование)
+- [CI/CD](#cicd)
 - [Структура проекта](#структура-проекта)
-- [Лицензия](#лицензия)
 
 ## 🛠 Технологии
 
@@ -23,6 +25,7 @@
 - **python-jose** – JWT токены
 - **bcrypt** – хеширование паролей
 - **pytest** – тестирование
+- **GitHub Actions** – CI/CD
 
 ## 🚀 Установка и запуск
 
@@ -134,7 +137,7 @@ python run.py
 
 | Метод | Эндпоинт | Описание | Требует токен |
 |-------|----------|----------|---------------|
-| GET | `/purchase-history` | История покупок пользователя | ✅ |
+| GET | `/purchase-history/` | История покупок пользователя (поддерживает `skip`/`limit`) | ✅ |
 | GET | `/recommendations/{product_name}` | Рекомендации (статический словарь + анализ истории) | ✅ |
 
 ## 🗄 Схема базы данных
@@ -167,7 +170,18 @@ pytest -v
 
 Тесты покрывают:
 - регистрацию и логин,
-- создание списка покупок.
+- создание, обновление и удаление списков,
+- добавление, обновление и удаление товаров,
+- права доступа (чужие списки/товары),
+- историю покупок и пагинацию,
+- статические и динамические рекомендации.
+
+## ⚙️ CI/CD
+
+Проект использует **GitHub Actions** для автоматического запуска тестов при каждом push в ветку `master`.  
+Файл конфигурации: `.github/workflows/tests.yml`.
+
+Статус последнего запуска: [![Run tests](https://github.com/enderior/smart-shoplist-backend/actions/workflows/tests.yml/badge.svg)](https://github.com/enderior/smart-shoplist-backend/actions/workflows/tests.yml)
 
 ## 📁 Структура проекта
 
@@ -175,16 +189,17 @@ pytest -v
 smart-shoplist/
 ├── backend/
 │   ├── app/
-│   │   ├── api/v1/endpoints/   # Эндпоинты (auth, users, lists, recommendations)
+│   │   ├── api/v1/endpoints/   # Эндпоинты (auth, users, lists, recommendations, purchase_history)
 │   │   ├── core/               # Конфигурация, БД, безопасность
 │   │   ├── models/             # SQLAlchemy модели
 │   │   ├── schemas/            # Pydantic схемы
 │   │   └── main.py             # Точка входа FastAPI
 │   ├── alembic/                # Миграции БД
 │   ├── tests/                  # Модульные тесты
-│   ├── .env                    # Переменные окружения
+│   ├── .env                    # Переменные окружения (не в Git)
 │   ├── requirements.txt        # Зависимости
 │   └── run.py                  # Запуск сервера
+├── .github/workflows/          # CI/CD конфигурация
 ├── docs/
 │   └── database_schema.png     # Диаграмма БД
 ├── sql/                        # SQL-скрипты (инициализация, тестовые данные)
@@ -195,3 +210,8 @@ smart-shoplist/
 ## 📄 Лицензия
 
 Проект разработан в учебных целях. Свободное использование.
+
+---
+
+**Разработано в рамках учебного проекта.**  
+По всем вопросам обращайтесь в [Issues](https://github.com/enderior/smart-shoplist-backend/issues).
