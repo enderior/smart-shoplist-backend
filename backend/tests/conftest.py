@@ -2,6 +2,9 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+import os
+os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///./test.db"
+
 import pytest
 from typing import AsyncGenerator
 from httpx import AsyncClient, ASGITransport
