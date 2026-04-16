@@ -6,6 +6,7 @@ from app.core.database import get_db
 from app.core.dependencies import get_current_active_user
 from app.models.user import User
 from app.models.shopping_list import ShoppingList, ListItem
+from app.models.purchase_history import PurchaseHistory
 from app.schemas.shopping_list import (
     ShoppingListCreate,
     ShoppingListUpdate,
@@ -225,6 +226,14 @@ async def update_item(
         item.is_completed = item_data.is_completed
     if item_data.position is not None:
         item.position = item_data.position
+
+    # Если товар только что стал выполненным (is_completed меняется с False на True)
+    if item_data.is_completed is True and item.is_completed is False:
+        history_entry = PurchaseHistory(
+            user_id=current_user.id,
+            product_name=item.name
+        )
+        db.add(history_entry)
 
     await db.commit()
     await db.refresh(item)

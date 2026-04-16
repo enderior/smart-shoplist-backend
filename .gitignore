@@ -42,3 +42,8 @@ Thumbs.db
 *.tmp
 *.bak
 backend/.env
+
+# pytest
+.pytest_cache/
+.coverage
+htmlcov/
