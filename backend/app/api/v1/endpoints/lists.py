@@ -200,8 +200,7 @@ async def update_item(
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_active_user)
 ):
-    """Обновляет товар (название, количество, единицу измерения, отметку о покупке, позицию)."""
-    # Находим товар и проверяем, что он принадлежит пользователю через список
+    # Находим товар и проверяем, что он принадлежит пользователю
     result = await db.execute(
         select(ListItem)
         .join(ShoppingList)
@@ -211,24 +210,26 @@ async def update_item(
         )
     )
     item = result.scalar_one_or_none()
-
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
 
-    # Обновляем только переданные поля
+    # Сохраняем старое значение is_completed ДО обновления
+    old_completed = item.is_completed
+
+    # Обновляем поля
     if item_data.name is not None:
         item.name = item_data.name
     if item_data.quantity is not None:
         item.quantity = item_data.quantity
     if item_data.unit is not None:
         item.unit = item_data.unit
-    if item_data.is_completed is not None:
-        item.is_completed = item_data.is_completed
     if item_data.position is not None:
         item.position = item_data.position
+    if item_data.is_completed is not None:
+        item.is_completed = item_data.is_completed
 
-    # Если товар только что стал выполненным (is_completed меняется с False на True)
-    if item_data.is_completed is True and item.is_completed is False:
+    # Если статус изменился с False на True – добавляем в историю
+    if not old_completed and item.is_completed is True:
         history_entry = PurchaseHistory(
             user_id=current_user.id,
             product_name=item.name
