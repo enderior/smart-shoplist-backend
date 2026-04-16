@@ -1,0 +1,33 @@
+name: Run tests
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest   # можно использовать windows-latest, но ubuntu быстрее
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.13'
+
+    - name: Install dependencies
+      run: |
+        cd backend
+        python -m pip install --upgrade pip
+        # Устанавливаем только нужные для тестов пакеты (без asyncpg, т.к. используем SQLite)
+        pip install fastapi uvicorn sqlalchemy alembic pydantic pydantic-settings python-dotenv passlib python-jose[cryptography] python-multipart email-validator bcrypt
+        pip install pytest pytest-asyncio httpx aiosqlite
+
+    - name: Run tests
+      run: |
+        cd backend
+        pytest -v
