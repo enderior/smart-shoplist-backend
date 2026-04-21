@@ -1,15 +1,14 @@
 ﻿from fastapi import FastAPI
 from contextlib import asynccontextmanager
+from fastapi.staticfiles import StaticFiles
 from app.core.config import settings
 from app.core.database import engine, Base
-from app.models import User, ShoppingList, ListItem
+from app.models import User, ShoppingList, ListItem, PurchaseHistory
 from app.api.v1.endpoints import users, auth, lists, recommendations, purchase_history
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Таблицы создаются через Alembic, автоматическое создание отключено
-    # async with engine.begin() as conn:
-    #     await conn.run_sync(Base.metadata.create_all)
     yield
     await engine.dispose()
 
@@ -19,6 +18,8 @@ app = FastAPI(
     debug=settings.DEBUG,
     lifespan=lifespan
 )
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Подключаем роутеры
 app.include_router(users.router)

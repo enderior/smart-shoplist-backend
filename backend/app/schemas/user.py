@@ -1,5 +1,5 @@
 ﻿from pydantic import BaseModel, EmailStr, Field
-from datetime import datetime
+from datetime import datetime, date
 from typing import Optional
 
 
@@ -7,6 +7,8 @@ class UserBase(BaseModel):
     email: EmailStr
     username: str
     phone: Optional[str] = Field(None, pattern=r'^\+?[1-9]\d{1,14}$')
+    birth_date: Optional[date] = None
+    avatar_url: Optional[str] = None
 
 
 class UserCreate(UserBase):
@@ -26,6 +28,13 @@ class UserResponse(UserBase):
 
     class Config:
         from_attributes = True
+
+
+class UserUpdate(BaseModel):
+    email: Optional[EmailStr] = None
+    username: Optional[str] = None
+    phone: Optional[str] = Field(None, pattern=r'^\+?[1-9]\d{1,14}$')
+    birth_date: Optional[date] = None
 
 
 class Token(BaseModel):
