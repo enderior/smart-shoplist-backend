@@ -148,7 +148,7 @@ python run.py
 
 ### Описание таблиц
 
-- **users** – пользователи (id, email, username, phone, hashed_password, is_active, created_at, updated_at)
+- **users** – пользователи (id, email, username, phone, hashed_password, is_active, created_at, updated_at, birth_date, avatar_url)
 - **shopping_lists** – списки покупок (id, title, description, owner_id, is_archived, created_at, updated_at)
 - **list_items** – товары в списках (id, list_id, name, quantity, unit, is_completed, position, created_at)
 - **purchase_history** – история покупок (id, user_id, product_name, purchased_at)
