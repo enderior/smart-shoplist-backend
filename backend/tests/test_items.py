@@ -1,6 +1,7 @@
 import pytest
 from httpx import AsyncClient
 
+
 @pytest.mark.asyncio
 async def test_add_item(client: AsyncClient):
     # Регистрация и логин
@@ -33,6 +34,7 @@ async def test_add_item(client: AsyncClient):
     assert item["unit"] == "шт"
     assert item["is_completed"] is False
 
+
 @pytest.mark.asyncio
 async def test_update_item_fields(client: AsyncClient):
     # Регистрация и логин
@@ -63,6 +65,7 @@ async def test_update_item_fields(client: AsyncClient):
     data = update_resp.json()
     assert data["name"] == "Обновлённый товар"
     assert data["quantity"] == 10
+
 
 @pytest.mark.asyncio
 async def test_delete_item(client: AsyncClient):

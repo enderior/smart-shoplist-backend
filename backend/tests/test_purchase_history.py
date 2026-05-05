@@ -1,6 +1,7 @@
 import pytest
 from httpx import AsyncClient
 
+
 @pytest.mark.asyncio
 async def test_purchase_history_empty(client: AsyncClient):
     # Регистрация нового пользователя
@@ -21,6 +22,7 @@ async def test_purchase_history_empty(client: AsyncClient):
     resp = await client.get("/purchase-history/", headers=headers)
     assert resp.status_code == 200
     assert resp.json() == []
+
 
 @pytest.mark.asyncio
 async def test_purchase_history_after_completion(client: AsyncClient):
@@ -64,6 +66,7 @@ async def test_purchase_history_after_completion(client: AsyncClient):
     history = history_resp.json()
     assert len(history) == 1
     assert history[0]["product_name"] == "Молоко"
+
 
 @pytest.mark.asyncio
 async def test_purchase_history_pagination(client: AsyncClient):

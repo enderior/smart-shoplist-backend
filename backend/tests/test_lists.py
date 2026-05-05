@@ -1,6 +1,7 @@
 import pytest
 from httpx import AsyncClient
 
+
 @pytest.mark.asyncio
 async def test_update_list(client: AsyncClient):
     # Регистрация
@@ -33,6 +34,7 @@ async def test_update_list(client: AsyncClient):
     assert data["title"] == "Новое название"
     assert data["description"] == "Новое описание"
 
+
 @pytest.mark.asyncio
 async def test_delete_list(client: AsyncClient):
     # Регистрация
@@ -61,6 +63,7 @@ async def test_delete_list(client: AsyncClient):
     # Попробовать получить удалённый список (должен быть 404)
     get_resp = await client.get(f"/lists/{list_id}", headers=headers)
     assert get_resp.status_code == 404
+
 
 @pytest.mark.asyncio
 async def test_access_other_user_list(client: AsyncClient):
@@ -96,7 +99,7 @@ async def test_access_other_user_list(client: AsyncClient):
 
     # Второй пользователь пытается получить чужой список
     get_resp = await client.get(f"/lists/{list_id}", headers=headers2)
-    assert get_resp.status_code == 404   # или 403, смотря как реализовано
+    assert get_resp.status_code == 404  # или 403, смотря как реализовано
 
     # Попытка обновить чужой список
     put_resp = await client.put(f"/lists/{list_id}", json={"title": "hack"}, headers=headers2)

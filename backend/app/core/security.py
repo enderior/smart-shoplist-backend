@@ -7,6 +7,7 @@ SECRET_KEY = settings.SECRET_KEY
 ALGORITHM = settings.ALGORITHM
 ACCESS_TOKEN_EXPIRE_MINUTES = settings.ACCESS_TOKEN_EXPIRE_MINUTES
 
+
 # ========== Хеширование паролей (bcrypt напрямую) ==========
 def get_password_hash(password: str) -> str:
     """Превращает пароль в хеш с помощью bcrypt."""
@@ -14,12 +15,14 @@ def get_password_hash(password: str) -> str:
     hashed = bcrypt.hashpw(password.encode('utf-8'), salt)
     return hashed.decode('utf-8')
 
+
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Проверяет, совпадает ли пароль с хешем."""
     return bcrypt.checkpw(
         plain_password.encode('utf-8'),
         hashed_password.encode('utf-8')
     )
+
 
 # ========== JWT токены ==========
 def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
@@ -31,6 +34,7 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
         expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
 
 def decode_access_token(token: str) -> dict | None:
     """Декодирует JWT токен."""

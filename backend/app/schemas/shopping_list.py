@@ -2,6 +2,7 @@
 from datetime import datetime
 from typing import Optional, List
 
+
 class ListItemBase(BaseModel):
     name: str
     quantity: int = 1
@@ -9,8 +10,10 @@ class ListItemBase(BaseModel):
     is_completed: bool = False
     position: int = 0
 
+
 class ListItemCreate(ListItemBase):
     pass
+
 
 class ListItemUpdate(BaseModel):
     name: Optional[str] = None
@@ -19,25 +22,30 @@ class ListItemUpdate(BaseModel):
     is_completed: Optional[bool] = None
     position: Optional[int] = None
 
+
 class ListItemResponse(ListItemBase):
     id: int
     list_id: int
     created_at: datetime
-    
+
     class Config:
         from_attributes = True
+
 
 class ShoppingListBase(BaseModel):
     title: str
     description: Optional[str] = None
 
+
 class ShoppingListCreate(ShoppingListBase):
     pass
+
 
 class ShoppingListUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     is_archived: Optional[bool] = None
+
 
 class ShoppingListResponse(ShoppingListBase):
     id: int
@@ -46,6 +54,6 @@ class ShoppingListResponse(ShoppingListBase):
     created_at: datetime
     updated_at: Optional[datetime] = None
     items: Optional[List[ListItemResponse]] = None
-    
+
     class Config:
         from_attributes = True

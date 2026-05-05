@@ -1,8 +1,10 @@
 import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import os
+
 os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///./test.db"
 
 import pytest
@@ -18,6 +20,7 @@ TEST_DATABASE_URL = "sqlite+aiosqlite:///./test.db"
 engine = create_async_engine(TEST_DATABASE_URL, echo=False)
 TestingSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
+
 async def override_get_db():
     async with TestingSessionLocal() as session:
         try:
@@ -29,7 +32,9 @@ async def override_get_db():
         finally:
             await session.close()
 
+
 app.dependency_overrides[get_db] = override_get_db
+
 
 @pytest.fixture(autouse=True)
 async def create_tables():
@@ -38,6 +43,7 @@ async def create_tables():
     yield
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
+
 
 @pytest.fixture
 async def client() -> AsyncGenerator:

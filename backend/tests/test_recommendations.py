@@ -1,6 +1,7 @@
 import pytest
 from httpx import AsyncClient
 
+
 @pytest.mark.asyncio
 async def test_recommendations_static(client: AsyncClient):
     # Регистрация пользователя
@@ -122,3 +123,42 @@ async def test_recommendations_empty_list(client: AsyncClient):
     recommendations = resp.json()["recommendations"]
     # Для пустого списка рекомендации должны быть пустым массивом
     assert recommendations == []
+
+
+@pytest.mark.asyncio
+async def test_recommendations_with_purchase_history(client: AsyncClient):
+    # Регистрация
+    await client.post("/auth/register", json={
+        "email": "rec_history@example.com",
+        "username": "rechist",
+        "password": "pass"
+    })
+    login_resp = await client.post("/auth/login", data={
+        "username": "rec_history@example.com",
+        "password": "pass"
+    })
+    token = login_resp.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Создать список и добавить товары
+    list_resp = await client.post("/lists/", json={"title": "Тест"}, headers=headers)
+    list_id = list_resp.json()["id"]
+    item1 = await client.post(f"/lists/{list_id}/items", json={"name": "хлеб"}, headers=headers)
+    item1_id = item1.json()["id"]
+    item2 = await client.post(f"/lists/{list_id}/items", json={"name": "масло"}, headers=headers)
+    item2_id = item2.json()["id"]
+
+    # Отметить оба как купленные (добавится история)
+    await client.put(f"/lists/items/{item1_id}", json={"is_completed": True}, headers=headers)
+    await client.put(f"/lists/items/{item2_id}", json={"is_completed": True}, headers=headers)
+
+    # Создать новый список и добавить только "хлеб"
+    list2_resp = await client.post("/lists/", json={"title": "Новый список"}, headers=headers)
+    list2_id = list2_resp.json()["id"]
+    await client.post(f"/lists/{list2_id}/items", json={"name": "хлеб"}, headers=headers)
+
+    # Получить рекомендации – должно быть масло (из истории)
+    rec_resp = await client.get(f"/recommendations/list/{list2_id}", headers=headers)
+    assert rec_resp.status_code == 200
+    recs = rec_resp.json()["recommendations"]
+    assert "масло" in recs

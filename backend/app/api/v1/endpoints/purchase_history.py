@@ -9,12 +9,13 @@ from app.schemas.purchase_history import PurchaseHistoryResponse
 
 router = APIRouter(prefix="/purchase-history", tags=["Purchase History"])
 
+
 @router.get("/", response_model=list[PurchaseHistoryResponse])
 async def get_purchase_history(
-    skip: int = 0,
-    limit: int = 100,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+        skip: int = 0,
+        limit: int = 100,
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_active_user)
 ):
     result = await db.execute(
         select(PurchaseHistory)
