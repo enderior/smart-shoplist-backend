@@ -4,7 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from app.core.config import settings
 from app.core.database import engine, Base
 from app.models import User, ShoppingList, ListItem, PurchaseHistory
-from app.api.v1.endpoints import users, auth, lists, recommendations, purchase_history, search
+from app.api.v1.endpoints import users, auth, lists, recommendations, purchase_history, search, shared_lists
 
 
 @asynccontextmanager
@@ -26,6 +26,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 # Подключаем роутеры
 app.include_router(users.router)
 app.include_router(lists.router)
+app.include_router(shared_lists.router)
 app.include_router(recommendations.router)
 app.include_router(search.router)
 app.include_router(purchase_history.router)

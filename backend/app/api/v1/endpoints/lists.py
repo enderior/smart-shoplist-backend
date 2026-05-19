@@ -7,6 +7,7 @@ from app.core.dependencies import get_current_active_user
 from app.models.user import User
 from app.models.shopping_list import ShoppingList, ListItem
 from app.models.purchase_history import PurchaseHistory
+from app.models.list_member import ListMember
 from app.schemas.shopping_list import (
     ShoppingListCreate,
     ShoppingListUpdate,
@@ -54,12 +55,34 @@ async def get_user_lists(
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_active_user)
 ):
-    """Возвращает ВСЕ списки текущего пользователя (без товаров)."""
-    result = await db.execute(
+    """Возвращает ВСЕ списки, доступные пользователю (свои + совместные)."""
+
+    # 1. Свои списки (где пользователь владелец)
+    own_result = await db.execute(
         select(ShoppingList).where(ShoppingList.owner_id == current_user.id)
     )
-    lists = result.scalars().all()
+    own_lists = own_result.scalars().all()
 
+    # 2. Совместные списки (где пользователь добавлен в list_members)
+    # Импортируем ListMember (добавь в начале файла)
+    from app.models.list_member import ListMember
+
+    shared_result = await db.execute(
+        select(ShoppingList)
+        .join(ListMember, ListMember.list_id == ShoppingList.id)
+        .where(ListMember.user_id == current_user.id)
+    )
+    shared_lists = shared_result.scalars().all()
+
+    # 3. Объединяем, избегая дубликатов (если пользователь и владелец, и участник)
+    all_lists_dict = {}
+    for lst in own_lists:
+        all_lists_dict[lst.id] = lst
+    for lst in shared_lists:
+        if lst.id not in all_lists_dict:
+            all_lists_dict[lst.id] = lst
+
+    # 4. Преобразуем в список Pydantic-схем
     return [
         ShoppingListResponse(
             id=item.id,
@@ -69,9 +92,9 @@ async def get_user_lists(
             is_archived=item.is_archived,
             created_at=item.created_at,
             updated_at=item.updated_at,
-            items=[]
+            items=[]  # без товаров
         )
-        for item in lists
+        for item in all_lists_dict.values()
     ]
 
 
