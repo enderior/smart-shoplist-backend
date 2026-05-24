@@ -1,0 +1,20 @@
+services:
+  postgres_db:
+    build:
+      context: .
+      dockerfile: Dockerfile-postgres
+    container_name: postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=smartlist
+      - POSTGRES_PASSWORD=smartlist
+      - POSTGRES_DB=smartlist
+      - POSTGRES_INITDB_ARGS=--locale=ru_RU.UTF-8 --lc-collate=ru_RU.UTF-8 --lc-ctype=ru_RU.UTF-8
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+
+
+volumes:
+  postgres_data:

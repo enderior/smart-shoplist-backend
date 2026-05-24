@@ -1,0 +1,10 @@
+FROM postgres:18
+
+# Разрешаем и генерируем локаль ru_RU.UTF-8
+RUN sed -i '/ru_RU.UTF-8/s/^# //g' /etc/locale.gen && \
+    locale-gen ru_RU.UTF-8
+
+# Устанавливаем системные переменные окружения для локали
+ENV LANG=ru_RU.UTF-8
+ENV LANGUAGE=ru_RU:ru
+ENV LC_ALL=ru_RU.UTF-8
