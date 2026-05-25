@@ -51,22 +51,27 @@ async def update_user(
 ):
     """Обновляет данные текущего пользователя (email, username, phone, birth_date)."""
 
-    if user_data.email is not None:
-        # Проверка уникальности email
+    # 1. Обновляем email (только если он передан и отличается от текущего)
+    if user_data.email is not None and user_data.email != current_user.email:
+        # Проверяем уникальность email
         existing = await db.execute(select(User).where(User.email == user_data.email))
         if existing.scalar_one_or_none():
             raise HTTPException(status_code=400, detail="Email уже используется")
         current_user.email = user_data.email
 
-    if user_data.username is not None:
-        # Проверка уникальности username
+    # 2. Обновляем username (только если он передан и отличается от текущего)
+    if user_data.username is not None and user_data.username != current_user.username:
+        # Проверяем уникальность username
         existing = await db.execute(select(User).where(User.username == user_data.username))
         if existing.scalar_one_or_none():
             raise HTTPException(status_code=400, detail="Username уже используется")
         current_user.username = user_data.username
 
+    # 3. Обновляем phone (если передан)
     if user_data.phone is not None:
         current_user.phone = user_data.phone
+
+    # 4. Обновляем birth_date (если передан)
     if user_data.birth_date is not None:
         current_user.birth_date = user_data.birth_date
 
