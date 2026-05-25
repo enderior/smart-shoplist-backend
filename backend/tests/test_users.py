@@ -2,7 +2,6 @@ import pytest
 from httpx import AsyncClient
 from datetime import date
 
-
 @pytest.mark.asyncio
 async def test_update_user(client: AsyncClient):
     # Регистрация
@@ -19,20 +18,53 @@ async def test_update_user(client: AsyncClient):
     token = login_resp.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
 
-    # Обновление всех полей
-    new_data = {
-        "email": "newemail@example.com",
-        "username": "newusername",
-        "phone": "+79991112233",
+    # 1. Обновляем только username
+    resp1 = await client.patch("/users/me", json={
+        "username": "newusername"
+    }, headers=headers)
+    assert resp1.status_code == 200
+    data1 = resp1.json()
+    assert data1["username"] == "newusername"
+    assert data1["email"] == "update@example.com"  # email не изменился
+
+    # 2. Обновляем только email
+    resp2 = await client.patch("/users/me", json={
+        "email": "newemail@example.com"
+    }, headers=headers)
+    assert resp2.status_code == 200
+    data2 = resp2.json()
+    assert data2["email"] == "newemail@example.com"
+    assert data2["username"] == "newusername"  # username не изменился
+
+    # 3. Обновляем только phone
+    resp3 = await client.patch("/users/me", json={
+        "phone": "+79991112233"
+    }, headers=headers)
+    assert resp3.status_code == 200
+    data3 = resp3.json()
+    assert data3["phone"] == "+79991112233"
+
+    # 4. Обновляем только birth_date
+    resp4 = await client.patch("/users/me", json={
         "birth_date": "1990-01-01"
-    }
-    resp = await client.patch("/users/me", json=new_data, headers=headers)
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["email"] == "newemail@example.com"
-    assert data["username"] == "newusername"
-    assert data["phone"] == "+79991112233"
-    assert data["birth_date"] == "1990-01-01"
+    }, headers=headers)
+    assert resp4.status_code == 200
+    data4 = resp4.json()
+    assert data4["birth_date"] == "1990-01-01"
+
+    # 5. Обновляем все поля сразу
+    resp5 = await client.patch("/users/me", json={
+        "username": "fullupdate",
+        "email": "full@example.com",
+        "phone": "+78888888888",
+        "birth_date": "1995-05-05"
+    }, headers=headers)
+    assert resp5.status_code == 200
+    data5 = resp5.json()
+    assert data5["username"] == "fullupdate"
+    assert data5["email"] == "full@example.com"
+    assert data5["phone"] == "+78888888888"
+    assert data5["birth_date"] == "1995-05-05"
 
 
 @pytest.mark.asyncio

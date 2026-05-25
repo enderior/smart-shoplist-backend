@@ -33,7 +33,7 @@ class UserResponse(UserBase):
 class UserUpdate(BaseModel):
     email: Optional[EmailStr] = None
     username: Optional[str] = None
-    phone: Optional[str] = Field(None, pattern=r'^\+?[1-9]\d{11}$')
+    phone: Optional[str] = Field(None, pattern=r'^\+?[1-9]\d{1,14}$')
     birth_date: Optional[date] = None
 
 
