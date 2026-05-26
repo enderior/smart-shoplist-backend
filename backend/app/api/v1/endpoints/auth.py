@@ -65,7 +65,7 @@ async def login(
 
     # Создаём JWT-токен
     access_token = create_access_token(
-        data={"sub": user.username, "user_id": user.id}
+        data={"sub": str(user.id), "username": user.username}
     )
 
     return {"access_token": access_token, "token_type": "bearer"}
