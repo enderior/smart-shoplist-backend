@@ -49,4 +49,4 @@ backend/.env
 htmlcov/
 
 # Игнорируем все файлы в папке static/avatars/
-static/avatars/
+backend/static/avatars/

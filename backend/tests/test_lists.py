@@ -1,6 +1,7 @@
 import pytest
 from httpx import AsyncClient
 
+
 @pytest.mark.asyncio
 async def test_update_list(client: AsyncClient):
     # Регистрация
@@ -32,6 +33,7 @@ async def test_update_list(client: AsyncClient):
     assert data["title"] == "Новое название"
     # description удалён, поэтому не проверяем
 
+
 @pytest.mark.asyncio
 async def test_delete_list(client: AsyncClient):
     # Регистрация
@@ -61,6 +63,7 @@ async def test_delete_list(client: AsyncClient):
     # Попробовать получить удалённый список
     get_resp = await client.get(f"/lists/{list_id}", headers=headers)
     assert get_resp.status_code == 404
+
 
 @pytest.mark.asyncio
 async def test_access_other_user_list(client: AsyncClient):
@@ -95,14 +98,14 @@ async def test_access_other_user_list(client: AsyncClient):
     token2 = login2.json()["access_token"]
     headers2 = {"Authorization": f"Bearer {token2}"}
 
-    # Второй пользователь пытается получить чужой список
+    # Второй пользователь пытается получить чужой список (404, так как нет доступа)
     get_resp = await client.get(f"/lists/{list_id}", headers=headers2)
     assert get_resp.status_code == 404
 
-    # Попытка обновить чужой список
+    # Попытка обновить чужой список (403, так как нет прав write)
     put_resp = await client.put(f"/lists/{list_id}", json={"title": "hack"}, headers=headers2)
-    assert put_resp.status_code == 404
+    assert put_resp.status_code == 403
 
-    # Попытка удалить чужой список
+    # Попытка удалить чужой список (403, так как нет прав write)
     del_resp = await client.delete(f"/lists/{list_id}", headers=headers2)
-    assert del_resp.status_code == 404
+    assert del_resp.status_code == 403
