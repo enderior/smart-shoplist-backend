@@ -7,7 +7,7 @@ from app.core.dependencies import get_current_active_user
 from app.models.user import User
 from app.models.shopping_list import ShoppingList, ListItem
 from app.models.purchase_history import PurchaseHistory
-from app.models.list_member import ListMember
+from app.models.list_member import ListMember  # Добавлен импорт
 from app.schemas.shopping_list import (
     ShoppingListCreate,
     ShoppingListUpdate,
@@ -20,8 +20,6 @@ from app.schemas.shopping_list import (
 router = APIRouter(prefix="/lists", tags=["Shopping Lists"])
 
 
-# ========== ЭНДПОИНТЫ ДЛЯ СПИСКОВ ==========
-
 @router.post("/", response_model=ShoppingListResponse, status_code=status.HTTP_201_CREATED)
 async def create_list(
         list_data: ShoppingListCreate,
@@ -31,7 +29,6 @@ async def create_list(
     """Создаёт новый список покупок для текущего пользователя."""
     new_list = ShoppingList(
         title=list_data.title,
-        description=list_data.description,
         owner_id=current_user.id
     )
     db.add(new_list)
@@ -41,9 +38,7 @@ async def create_list(
     return ShoppingListResponse(
         id=new_list.id,
         title=new_list.title,
-        description=new_list.description,
         owner_id=new_list.owner_id,
-        is_archived=new_list.is_archived,
         created_at=new_list.created_at,
         updated_at=new_list.updated_at,
         items=[]
@@ -56,16 +51,10 @@ async def get_user_lists(
         current_user: User = Depends(get_current_active_user)
 ):
     """Возвращает ВСЕ списки, доступные пользователю (свои + совместные)."""
-
-    # 1. Свои списки (где пользователь владелец)
     own_result = await db.execute(
         select(ShoppingList).where(ShoppingList.owner_id == current_user.id)
     )
     own_lists = own_result.scalars().all()
-
-    # 2. Совместные списки (где пользователь добавлен в list_members)
-    # Импортируем ListMember (добавь в начале файла)
-    from app.models.list_member import ListMember
 
     shared_result = await db.execute(
         select(ShoppingList)
@@ -74,7 +63,6 @@ async def get_user_lists(
     )
     shared_lists = shared_result.scalars().all()
 
-    # 3. Объединяем, избегая дубликатов (если пользователь и владелец, и участник)
     all_lists_dict = {}
     for lst in own_lists:
         all_lists_dict[lst.id] = lst
@@ -82,17 +70,14 @@ async def get_user_lists(
         if lst.id not in all_lists_dict:
             all_lists_dict[lst.id] = lst
 
-    # 4. Преобразуем в список Pydantic-схем
     return [
         ShoppingListResponse(
             id=item.id,
             title=item.title,
-            description=item.description,
             owner_id=item.owner_id,
-            is_archived=item.is_archived,
             created_at=item.created_at,
             updated_at=item.updated_at,
-            items=[]  # без товаров
+            items=[]
         )
         for item in all_lists_dict.values()
     ]
@@ -105,15 +90,56 @@ async def get_list_by_id(
         current_user: User = Depends(get_current_active_user)
 ):
     """Возвращает один список по ID с его товарами."""
+    # Проверяем доступ: владелец или участник (read/write)
     result = await db.execute(
-        select(ShoppingList)
-        .where(ShoppingList.id == list_id, ShoppingList.owner_id == current_user.id)
-        .options(selectinload(ShoppingList.items))
+        select(ShoppingList).where(ShoppingList.id == list_id)
     )
     shopping_list = result.scalar_one_or_none()
     if not shopping_list:
         raise HTTPException(status_code=404, detail="List not found")
+
+    is_owner = shopping_list.owner_id == current_user.id
+    if not is_owner:
+        member = await db.execute(
+            select(ListMember).where(
+                ListMember.list_id == list_id,
+                ListMember.user_id == current_user.id
+            )
+        )
+        if not member.scalar_one_or_none():
+            raise HTTPException(status_code=404, detail="List not found or no access")
+
+    # Подгружаем товары
+    result = await db.execute(
+        select(ShoppingList)
+        .where(ShoppingList.id == list_id)
+        .options(selectinload(ShoppingList.items))
+    )
+    shopping_list = result.scalar_one()
     return shopping_list
+
+
+async def check_write_permission(list_id: int, user_id: int, db: AsyncSession) -> bool:
+    """Проверяет, имеет ли пользователь право write для списка."""
+    # Проверяем владельца
+    list_result = await db.execute(
+        select(ShoppingList).where(
+            ShoppingList.id == list_id,
+            ShoppingList.owner_id == user_id
+        )
+    )
+    if list_result.scalar_one_or_none():
+        return True
+
+    # Проверяем участника с правом write
+    member = await db.execute(
+        select(ListMember).where(
+            ListMember.list_id == list_id,
+            ListMember.user_id == user_id,
+            ListMember.permission == "write"
+        )
+    )
+    return member.scalar_one_or_none() is not None
 
 
 @router.put("/{list_id}", response_model=ShoppingListResponse)
@@ -123,36 +149,29 @@ async def update_list(
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_active_user)
 ):
-    """Обновляет название или описание списка."""
+    """Обновляет название списка. Требует права write."""
+    if not await check_write_permission(list_id, current_user.id, db):
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+
     result = await db.execute(
-        select(ShoppingList).where(
-            ShoppingList.id == list_id,
-            ShoppingList.owner_id == current_user.id
-        )
+        select(ShoppingList).where(ShoppingList.id == list_id)
     )
     shopping_list = result.scalar_one_or_none()
-
     if not shopping_list:
         raise HTTPException(status_code=404, detail="List not found")
 
     if list_data.title is not None:
         shopping_list.title = list_data.title
-    if list_data.description is not None:
-        shopping_list.description = list_data.description
-    if list_data.is_archived is not None:
-        shopping_list.is_archived = list_data.is_archived
 
     await db.commit()
     await db.refresh(shopping_list)
 
-    # Подгружаем товары для ответа
     result = await db.execute(
         select(ShoppingList)
         .where(ShoppingList.id == list_id)
         .options(selectinload(ShoppingList.items))
     )
     updated_list = result.scalar_one()
-
     return updated_list
 
 
@@ -162,23 +181,20 @@ async def delete_list(
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_active_user)
 ):
-    """Удаляет список покупок (вместе со всеми товарами)."""
+    """Удаляет список покупок (вместе со всеми товарами). Требует права write."""
+    if not await check_write_permission(list_id, current_user.id, db):
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+
     result = await db.execute(
-        select(ShoppingList).where(
-            ShoppingList.id == list_id,
-            ShoppingList.owner_id == current_user.id
-        )
+        select(ShoppingList).where(ShoppingList.id == list_id)
     )
     shopping_list = result.scalar_one_or_none()
-
     if not shopping_list:
         raise HTTPException(status_code=404, detail="List not found")
 
     await db.delete(shopping_list)
     await db.commit()
 
-
-# ========== ЭНДПОИНТЫ ДЛЯ ТОВАРОВ ==========
 
 @router.post("/{list_id}/items", response_model=ListItemResponse, status_code=status.HTTP_201_CREATED)
 async def add_item_to_list(
@@ -187,32 +203,26 @@ async def add_item_to_list(
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_active_user)
 ):
-    """Добавляет новый товар в указанный список."""
-    # Проверяем, существует ли список и принадлежит ли он пользователю
+    """Добавляет новый товар в указанный список. Требует права write."""
+    if not await check_write_permission(list_id, current_user.id, db):
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+
     result = await db.execute(
-        select(ShoppingList).where(
-            ShoppingList.id == list_id,
-            ShoppingList.owner_id == current_user.id
-        )
+        select(ShoppingList).where(ShoppingList.id == list_id)
     )
     shopping_list = result.scalar_one_or_none()
-
     if not shopping_list:
         raise HTTPException(status_code=404, detail="List not found")
 
-    # Создаём новый товар
     new_item = ListItem(
         list_id=list_id,
         name=item_data.name,
         quantity=item_data.quantity,
         unit=item_data.unit,
-        position=item_data.position
     )
-
     db.add(new_item)
     await db.commit()
     await db.refresh(new_item)
-
     return new_item
 
 
@@ -223,35 +233,29 @@ async def update_item(
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_active_user)
 ):
-    # Находим товар и проверяем, что он принадлежит пользователю
+    """Обновляет товар. Требует права write."""
+    # Сначала получаем список, к которому относится товар
     result = await db.execute(
-        select(ListItem)
-        .join(ShoppingList)
-        .where(
-            ListItem.id == item_id,
-            ShoppingList.owner_id == current_user.id
-        )
+        select(ListItem).where(ListItem.id == item_id)
     )
     item = result.scalar_one_or_none()
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
 
-    # Сохраняем старое значение is_completed ДО обновления
+    if not await check_write_permission(item.list_id, current_user.id, db):
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+
     old_completed = item.is_completed
 
-    # Обновляем поля
     if item_data.name is not None:
         item.name = item_data.name
     if item_data.quantity is not None:
         item.quantity = item_data.quantity
     if item_data.unit is not None:
         item.unit = item_data.unit
-    if item_data.position is not None:
-        item.position = item_data.position
     if item_data.is_completed is not None:
         item.is_completed = item_data.is_completed
 
-    # Если статус изменился с False на True – добавляем в историю
     if not old_completed and item.is_completed is True:
         history_entry = PurchaseHistory(
             user_id=current_user.id,
@@ -261,7 +265,6 @@ async def update_item(
 
     await db.commit()
     await db.refresh(item)
-
     return item
 
 
@@ -271,20 +274,16 @@ async def delete_item(
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_active_user)
 ):
-    """Удаляет товар из списка."""
-    # Находим товар и проверяем, что он принадлежит пользователю через список
+    """Удаляет товар из списка. Требует права write."""
     result = await db.execute(
-        select(ListItem)
-        .join(ShoppingList)
-        .where(
-            ListItem.id == item_id,
-            ShoppingList.owner_id == current_user.id
-        )
+        select(ListItem).where(ListItem.id == item_id)
     )
     item = result.scalar_one_or_none()
-
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
+
+    if not await check_write_permission(item.list_id, current_user.id, db):
+        raise HTTPException(status_code=403, detail="Not enough permissions")
 
     await db.delete(item)
     await db.commit()

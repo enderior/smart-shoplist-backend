@@ -43,7 +43,6 @@ async def test_purchase_history_after_completion(client: AsyncClient):
     # Создать список
     list_resp = await client.post("/lists/", json={
         "title": "Тестовый список",
-        "description": "Для истории"
     }, headers=headers)
     list_id = list_resp.json()["id"]
 
