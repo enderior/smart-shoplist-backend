@@ -7,7 +7,6 @@ from app.core.dependencies import get_current_active_user
 from app.models.user import User
 from app.models.shopping_list import ShoppingList, ListItem
 from app.models.purchase_history import PurchaseHistory
-from app.models.list_member import ListMember
 from app.schemas.shopping_list import (
     ShoppingListCreate,
     ShoppingListUpdate,
@@ -19,8 +18,6 @@ from app.schemas.shopping_list import (
 
 router = APIRouter(prefix="/lists", tags=["Shopping Lists"])
 
-
-# ========== ЭНДПОИНТЫ ДЛЯ СПИСКОВ ==========
 
 @router.post("/", response_model=ShoppingListResponse, status_code=status.HTTP_201_CREATED)
 async def create_list(
@@ -40,9 +37,7 @@ async def create_list(
     return ShoppingListResponse(
         id=new_list.id,
         title=new_list.title,
-        description=new_list.description,
         owner_id=new_list.owner_id,
-        is_archived=new_list.is_archived,
         created_at=new_list.created_at,
         updated_at=new_list.updated_at,
         items=[]
@@ -55,16 +50,12 @@ async def get_user_lists(
         current_user: User = Depends(get_current_active_user)
 ):
     """Возвращает ВСЕ списки, доступные пользователю (свои + совместные)."""
+    from app.models.list_member import ListMember
 
-    # 1. Свои списки (где пользователь владелец)
     own_result = await db.execute(
         select(ShoppingList).where(ShoppingList.owner_id == current_user.id)
     )
     own_lists = own_result.scalars().all()
-
-    # 2. Совместные списки (где пользователь добавлен в list_members)
-    # Импортируем ListMember (добавь в начале файла)
-    from app.models.list_member import ListMember
 
     shared_result = await db.execute(
         select(ShoppingList)
@@ -73,7 +64,6 @@ async def get_user_lists(
     )
     shared_lists = shared_result.scalars().all()
 
-    # 3. Объединяем, избегая дубликатов (если пользователь и владелец, и участник)
     all_lists_dict = {}
     for lst in own_lists:
         all_lists_dict[lst.id] = lst
@@ -81,7 +71,6 @@ async def get_user_lists(
         if lst.id not in all_lists_dict:
             all_lists_dict[lst.id] = lst
 
-    # 4. Преобразуем в список Pydantic-схем
     return [
         ShoppingListResponse(
             id=item.id,
@@ -89,7 +78,7 @@ async def get_user_lists(
             owner_id=item.owner_id,
             created_at=item.created_at,
             updated_at=item.updated_at,
-            items=[]  # без товаров
+            items=[]
         )
         for item in all_lists_dict.values()
     ]
@@ -120,7 +109,7 @@ async def update_list(
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_active_user)
 ):
-    """Обновляет название или описание списка."""
+    """Обновляет название списка."""
     result = await db.execute(
         select(ShoppingList).where(
             ShoppingList.id == list_id,
@@ -128,7 +117,6 @@ async def update_list(
         )
     )
     shopping_list = result.scalar_one_or_none()
-
     if not shopping_list:
         raise HTTPException(status_code=404, detail="List not found")
 
@@ -138,14 +126,12 @@ async def update_list(
     await db.commit()
     await db.refresh(shopping_list)
 
-    # Подгружаем товары для ответа
     result = await db.execute(
         select(ShoppingList)
         .where(ShoppingList.id == list_id)
         .options(selectinload(ShoppingList.items))
     )
     updated_list = result.scalar_one()
-
     return updated_list
 
 
@@ -163,15 +149,12 @@ async def delete_list(
         )
     )
     shopping_list = result.scalar_one_or_none()
-
     if not shopping_list:
         raise HTTPException(status_code=404, detail="List not found")
 
     await db.delete(shopping_list)
     await db.commit()
 
-
-# ========== ЭНДПОИНТЫ ДЛЯ ТОВАРОВ ==========
 
 @router.post("/{list_id}/items", response_model=ListItemResponse, status_code=status.HTTP_201_CREATED)
 async def add_item_to_list(
@@ -181,7 +164,6 @@ async def add_item_to_list(
         current_user: User = Depends(get_current_active_user)
 ):
     """Добавляет новый товар в указанный список."""
-    # Проверяем, существует ли список и принадлежит ли он пользователю
     result = await db.execute(
         select(ShoppingList).where(
             ShoppingList.id == list_id,
@@ -189,22 +171,18 @@ async def add_item_to_list(
         )
     )
     shopping_list = result.scalar_one_or_none()
-
     if not shopping_list:
         raise HTTPException(status_code=404, detail="List not found")
 
-    # Создаём новый товар
     new_item = ListItem(
         list_id=list_id,
         name=item_data.name,
         quantity=item_data.quantity,
         unit=item_data.unit,
     )
-
     db.add(new_item)
     await db.commit()
     await db.refresh(new_item)
-
     return new_item
 
 
@@ -215,7 +193,6 @@ async def update_item(
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_active_user)
 ):
-    # Находим товар и проверяем, что он принадлежит пользователю
     result = await db.execute(
         select(ListItem)
         .join(ShoppingList)
@@ -228,10 +205,8 @@ async def update_item(
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
 
-    # Сохраняем старое значение is_completed ДО обновления
     old_completed = item.is_completed
 
-    # Обновляем поля
     if item_data.name is not None:
         item.name = item_data.name
     if item_data.quantity is not None:
@@ -241,7 +216,6 @@ async def update_item(
     if item_data.is_completed is not None:
         item.is_completed = item_data.is_completed
 
-    # Если статус изменился с False на True – добавляем в историю
     if not old_completed and item.is_completed is True:
         history_entry = PurchaseHistory(
             user_id=current_user.id,
@@ -251,7 +225,6 @@ async def update_item(
 
     await db.commit()
     await db.refresh(item)
-
     return item
 
 
@@ -262,7 +235,6 @@ async def delete_item(
         current_user: User = Depends(get_current_active_user)
 ):
     """Удаляет товар из списка."""
-    # Находим товар и проверяем, что он принадлежит пользователю через список
     result = await db.execute(
         select(ListItem)
         .join(ShoppingList)
@@ -272,7 +244,6 @@ async def delete_item(
         )
     )
     item = result.scalar_one_or_none()
-
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
 

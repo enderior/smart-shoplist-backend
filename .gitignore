@@ -47,3 +47,6 @@ backend/.env
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Игнорируем все файлы в папке static/avatars/
+static/avatars/

@@ -11,7 +11,6 @@ from app.schemas.shopping_list import ShoppingListResponse
 router = APIRouter(prefix="/shared", tags=["Shared Lists"])
 
 
-# ========== ПРИГЛАСИТЬ ПОЛЬЗОВАТЕЛЯ ==========
 @router.post("/lists/{list_id}/invite/{user_id}")
 async def invite_user(
         list_id: int,
@@ -19,9 +18,6 @@ async def invite_user(
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_active_user)
 ):
-    """Приглашает пользователя в список (по ID). Только владелец списка."""
-
-    # Проверяем, существует ли список и является ли пользователь владельцем
     result = await db.execute(
         select(ShoppingList).where(
             ShoppingList.id == list_id,
@@ -32,7 +28,6 @@ async def invite_user(
     if not shopping_list:
         raise HTTPException(status_code=404, detail="List not found or you are not owner")
 
-    # Находим приглашаемого пользователя
     user_result = await db.execute(select(User).where(User.id == user_id))
     invited_user = user_result.scalar_one_or_none()
     if not invited_user:
@@ -41,7 +36,6 @@ async def invite_user(
     if invited_user.id == current_user.id:
         raise HTTPException(status_code=400, detail="You cannot invite yourself")
 
-    # Проверяем, не добавлен ли уже
     existing = await db.execute(
         select(ListMember).where(
             ListMember.list_id == list_id,
@@ -51,7 +45,6 @@ async def invite_user(
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="User already has access to this list")
 
-    # Создаём запись
     member = ListMember(list_id=list_id, user_id=invited_user.id, permission="read")
     db.add(member)
     await db.commit()
@@ -59,7 +52,6 @@ async def invite_user(
     return {"message": f"User '{invited_user.username}' invited to list '{shopping_list.title}'"}
 
 
-# ========== УДАЛИТЬ ПОЛЬЗОВАТЕЛЯ ИЗ ДОСТУПА ==========
 @router.delete("/lists/{list_id}/members/{user_id}")
 async def remove_member(
         list_id: int,
@@ -67,9 +59,6 @@ async def remove_member(
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_active_user)
 ):
-    """Удаляет пользователя из совместного доступа. Только владелец списка."""
-
-    # Проверяем, что пользователь – владелец
     list_result = await db.execute(
         select(ShoppingList).where(
             ShoppingList.id == list_id,
@@ -79,7 +68,6 @@ async def remove_member(
     if not list_result.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="List not found or you are not owner")
 
-    # Удаляем запись
     result = await db.execute(
         select(ListMember).where(
             ListMember.list_id == list_id,
@@ -92,17 +80,14 @@ async def remove_member(
 
     await db.delete(member)
     await db.commit()
-
     return {"message": "User removed from shared access"}
 
 
-# ========== СПИСОК СОВМЕСТНЫХ СПИСКОВ (ГДЕ УЧАСТВУЕТ ПОЛЬЗОВАТЕЛЬ) ==========
 @router.get("/lists", response_model=list[ShoppingListResponse])
 async def get_shared_lists(
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_active_user)
 ):
-    """Возвращает списки, к которым пользователь имеет доступ (но не является владельцем)."""
     result = await db.execute(
         select(ShoppingList)
         .join(ListMember, ListMember.list_id == ShoppingList.id)
@@ -110,16 +95,14 @@ async def get_shared_lists(
     )
     shared_lists = result.scalars().all()
 
-    # Ручное преобразование в Pydantic-схемы
-    response_lists = [
+    return [
         ShoppingListResponse(
-            id=lst.id,
-            title=lst.title,
-            owner_id=lst.owner_id,
-            created_at=lst.created_at,
-            updated_at=lst.updated_at,
+            id=item.id,
+            title=item.title,
+            owner_id=item.owner_id,
+            created_at=item.created_at,
+            updated_at=item.updated_at,
             items=[]
         )
-        for lst in shared_lists
+        for item in shared_lists
     ]
-    return response_lists

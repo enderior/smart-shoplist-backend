@@ -1,7 +1,6 @@
 import pytest
 from httpx import AsyncClient
 
-
 @pytest.mark.asyncio
 async def test_invite_and_shared_list(client: AsyncClient):
     # 1. Регистрируем владельца
@@ -32,13 +31,12 @@ async def test_invite_and_shared_list(client: AsyncClient):
 
     # 3. Владелец создаёт список
     list_resp = await client.post("/lists/", json={
-        "title": "Совместный список",
-        "description": "Тестовый список"
+        "title": "Совместный список"
     }, headers=owner_headers)
     assert list_resp.status_code == 201
     list_id = list_resp.json()["id"]
 
-    # 4. Владелец приглашает гостя (нужно узнать guest_id)
+    # 4. Находим ID гостя
     users_resp = await client.get("/users/", headers=owner_headers)
     guest_id = None
     for user in users_resp.json():
@@ -47,39 +45,39 @@ async def test_invite_and_shared_list(client: AsyncClient):
             break
     assert guest_id is not None
 
+    # 5. Владелец приглашает гостя
     invite_resp = await client.post(f"/shared/lists/{list_id}/invite/{guest_id}", headers=owner_headers)
     assert invite_resp.status_code == 200
     assert "invited" in invite_resp.json()["message"]
 
-    # 5. Гость получает список совместных списков
+    # 6. Гость получает список совместных списков
     shared_resp = await client.get("/shared/lists", headers=guest_headers)
     assert shared_resp.status_code == 200
     shared_lists = shared_resp.json()
     assert len(shared_lists) == 1
     assert shared_lists[0]["title"] == "Совместный список"
 
-    # 6. Гость получает все свои списки (должен видеть и совместный)
+    # 7. Гость получает все свои списки (должен видеть и совместный)
     all_lists_resp = await client.get("/lists/", headers=guest_headers)
     all_lists = all_lists_resp.json()
     assert any(lst["title"] == "Совместный список" for lst in all_lists)
 
-    # 7. Гость НЕ может удалить чужой список
+    # 8. Гость НЕ может удалить чужой список
     delete_resp = await client.delete(f"/lists/{list_id}", headers=guest_headers)
-    assert delete_resp.status_code == 404  # или 403
+    assert delete_resp.status_code == 404
 
-    # 8. Владелец удаляет гостя из доступа
+    # 9. Владелец удаляет гостя из доступа
     remove_resp = await client.delete(f"/shared/lists/{list_id}/members/{guest_id}", headers=owner_headers)
     assert remove_resp.status_code == 200
 
-    # 9. Гость больше не видит список в /shared/lists
+    # 10. Гость больше не видит список в /shared/lists
     shared_resp2 = await client.get("/shared/lists", headers=guest_headers)
     assert shared_resp2.status_code == 200
     assert len(shared_resp2.json()) == 0
 
-    # 10. Гость не видит список и в общем списке
+    # 11. Гость не видит список и в общем списке
     all_lists_resp2 = await client.get("/lists/", headers=guest_headers)
     assert not any(lst["title"] == "Совместный список" for lst in all_lists_resp2.json())
-
 
 @pytest.mark.asyncio
 async def test_invite_nonexistent_user(client: AsyncClient):
@@ -98,8 +96,7 @@ async def test_invite_nonexistent_user(client: AsyncClient):
 
     # Создаём список
     list_resp = await client.post("/lists/", json={
-        "title": "Тестовый список",
-        "description": "Для проверки приглашения несуществующего пользователя"
+        "title": "Тестовый список"
     }, headers=owner_headers)
     assert list_resp.status_code == 201
     list_id = list_resp.json()["id"]
@@ -108,7 +105,6 @@ async def test_invite_nonexistent_user(client: AsyncClient):
     invite_resp = await client.post(f"/shared/lists/{list_id}/invite/99999", headers=owner_headers)
     assert invite_resp.status_code == 404
     assert "not found" in invite_resp.json()["detail"]
-
 
 @pytest.mark.asyncio
 async def test_invite_self(client: AsyncClient):
@@ -127,8 +123,7 @@ async def test_invite_self(client: AsyncClient):
 
     # Создаём список
     list_resp = await client.post("/lists/", json={
-        "title": "Тестовый список",
-        "description": "Для проверки самоприглашения"
+        "title": "Тестовый список"
     }, headers=owner_headers)
     assert list_resp.status_code == 201
     list_id = list_resp.json()["id"]

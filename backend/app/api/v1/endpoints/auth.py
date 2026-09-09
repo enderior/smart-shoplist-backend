@@ -5,14 +5,23 @@ from sqlalchemy import select, delete
 from sqlalchemy.sql import func
 from datetime import datetime, timedelta, timezone
 import secrets
+from pydantic import BaseModel  # <-- ДОБАВЛЯЕМ
 
 from app.core.database import get_db
 from app.core.security import get_password_hash, verify_password, create_access_token
 from app.models.user import User
-from app.models.password_reset_token import PasswordResetToken  # новая модель
+from app.models.password_reset_token import PasswordResetToken
 from app.schemas.user import UserCreate, Token
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+
+# ========== СХЕМЫ ДЛЯ ВОССТАНОВЛЕНИЯ ПАРОЛЯ ==========
+class ResetRequest(BaseModel):
+    email: str
+
+class ResetPasswordData(BaseModel):
+    token: str
+    new_password: str
 
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
@@ -68,24 +77,21 @@ async def login(
 # ========== ВОССТАНОВЛЕНИЕ ПАРОЛЯ ==========
 
 @router.post("/request-reset")
-async def request_password_reset(email: str, db: AsyncSession = Depends(get_db)):
+async def request_password_reset(data: ResetRequest, db: AsyncSession = Depends(get_db)):
     """
     Запрос на сброс пароля.
-    Отправляет ссылку для сброса (в реальном проекте — по email).
+    Принимает JSON: {"email": "user@example.com"}
     """
-    # Находим пользователя по email
+    email = data.email
     user = await db.execute(select(User).where(User.email == email))
     user = user.scalar_one_or_none()
     if not user:
-        # Для безопасности не сообщаем, существует ли пользователь
         return {"message": "Если пользователь с таким email существует, мы отправили ссылку для сброса пароля"}
 
-    # Удаляем старые токены этого пользователя
     await db.execute(
         delete(PasswordResetToken).where(PasswordResetToken.user_id == user.id)
     )
 
-    # Генерируем новый токен
     token = secrets.token_urlsafe(32)
     expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
 
@@ -97,40 +103,39 @@ async def request_password_reset(email: str, db: AsyncSession = Depends(get_db))
     db.add(reset_token)
     await db.commit()
 
-    # В реальном проекте здесь должна быть отправка email
     reset_link = f"http://localhost:8000/reset-password?token={token}"
-    print(f"🔗 Ссылка для сброса пароля: {reset_link}")  # временно выводим в консоль
+    print(f"🔗 Ссылка для сброса пароля: {reset_link}")
 
     return {"message": "Ссылка для сброса пароля отправлена на ваш email"}
 
 
 @router.post("/reset-password")
-async def reset_password(token: str, new_password: str, db: AsyncSession = Depends(get_db)):
+async def reset_password(data: ResetPasswordData, db: AsyncSession = Depends(get_db)):
     """
     Сброс пароля по токену.
+    Принимает JSON: {"token": "...", "new_password": "..."}
     """
-    # Проверяем токен
+    token = data.token
+    new_password = data.new_password
+
     reset_token = await db.execute(
         select(PasswordResetToken).where(PasswordResetToken.token == token)
     )
     reset_token = reset_token.scalar_one_or_none()
 
-    if not reset_token or reset_token.expires_at < datetime.now(timezone.utc):
+    if not reset_token or reset_token.expires_at.replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
         raise HTTPException(
             status_code=400,
             detail="Недействительный или истекший токен"
         )
 
-    # Находим пользователя
     user = await db.execute(select(User).where(User.id == reset_token.user_id))
     user = user.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=400, detail="Пользователь не найден")
 
-    # Обновляем пароль
     user.hashed_password = get_password_hash(new_password)
 
-    # Удаляем использованный токен
     await db.delete(reset_token)
     await db.commit()
 

@@ -1,7 +1,6 @@
 import pytest
 from httpx import AsyncClient
 
-
 @pytest.mark.asyncio
 async def test_update_list(client: AsyncClient):
     # Регистрация
@@ -19,21 +18,19 @@ async def test_update_list(client: AsyncClient):
 
     # Создать список
     create_resp = await client.post("/lists/", json={
-        "title": "Старое название",
-        "description": "Старое описание"
+        "title": "Старое название"
     }, headers=headers)
+    assert create_resp.status_code == 201
     list_id = create_resp.json()["id"]
 
     # Обновить список
     update_resp = await client.put(f"/lists/{list_id}", json={
-        "title": "Новое название",
-        "description": "Новое описание"
+        "title": "Новое название"
     }, headers=headers)
     assert update_resp.status_code == 200
     data = update_resp.json()
     assert data["title"] == "Новое название"
-    assert data["description"] == "Новое описание"
-
+    # description удалён, поэтому не проверяем
 
 @pytest.mark.asyncio
 async def test_delete_list(client: AsyncClient):
@@ -54,16 +51,16 @@ async def test_delete_list(client: AsyncClient):
     create_resp = await client.post("/lists/", json={
         "title": "Список для удаления"
     }, headers=headers)
+    assert create_resp.status_code == 201
     list_id = create_resp.json()["id"]
 
     # Удалить список
     delete_resp = await client.delete(f"/lists/{list_id}", headers=headers)
     assert delete_resp.status_code == 204
 
-    # Попробовать получить удалённый список (должен быть 404)
+    # Попробовать получить удалённый список
     get_resp = await client.get(f"/lists/{list_id}", headers=headers)
     assert get_resp.status_code == 404
-
 
 @pytest.mark.asyncio
 async def test_access_other_user_list(client: AsyncClient):
@@ -82,6 +79,7 @@ async def test_access_other_user_list(client: AsyncClient):
 
     # Создать список от первого пользователя
     list_resp = await client.post("/lists/", json={"title": "Список user1"}, headers=headers1)
+    assert list_resp.status_code == 201
     list_id = list_resp.json()["id"]
 
     # Регистрация второго пользователя
@@ -99,7 +97,7 @@ async def test_access_other_user_list(client: AsyncClient):
 
     # Второй пользователь пытается получить чужой список
     get_resp = await client.get(f"/lists/{list_id}", headers=headers2)
-    assert get_resp.status_code == 404  # или 403, смотря как реализовано
+    assert get_resp.status_code == 404
 
     # Попытка обновить чужой список
     put_resp = await client.put(f"/lists/{list_id}", json={"title": "hack"}, headers=headers2)

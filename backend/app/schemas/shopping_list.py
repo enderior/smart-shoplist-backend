@@ -45,7 +45,6 @@ class ShoppingListUpdate(BaseModel):
 class ShoppingListResponse(ShoppingListBase):
     id: int
     owner_id: int
-    is_archived: bool
     created_at: datetime
     updated_at: Optional[datetime] = None
     items: Optional[List[ListItemResponse]] = None
