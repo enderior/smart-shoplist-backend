@@ -115,9 +115,7 @@ async def get_shared_lists(
         ShoppingListResponse(
             id=lst.id,
             title=lst.title,
-            description=lst.description,
             owner_id=lst.owner_id,
-            is_archived=lst.is_archived,
             created_at=lst.created_at,
             updated_at=lst.updated_at,
             items=[]

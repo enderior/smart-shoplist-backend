@@ -31,7 +31,6 @@ async def create_list(
     """Создаёт новый список покупок для текущего пользователя."""
     new_list = ShoppingList(
         title=list_data.title,
-        description=list_data.description,
         owner_id=current_user.id
     )
     db.add(new_list)
@@ -87,9 +86,7 @@ async def get_user_lists(
         ShoppingListResponse(
             id=item.id,
             title=item.title,
-            description=item.description,
             owner_id=item.owner_id,
-            is_archived=item.is_archived,
             created_at=item.created_at,
             updated_at=item.updated_at,
             items=[]  # без товаров
@@ -137,10 +134,6 @@ async def update_list(
 
     if list_data.title is not None:
         shopping_list.title = list_data.title
-    if list_data.description is not None:
-        shopping_list.description = list_data.description
-    if list_data.is_archived is not None:
-        shopping_list.is_archived = list_data.is_archived
 
     await db.commit()
     await db.refresh(shopping_list)
@@ -206,7 +199,6 @@ async def add_item_to_list(
         name=item_data.name,
         quantity=item_data.quantity,
         unit=item_data.unit,
-        position=item_data.position
     )
 
     db.add(new_item)
@@ -246,8 +238,6 @@ async def update_item(
         item.quantity = item_data.quantity
     if item_data.unit is not None:
         item.unit = item_data.unit
-    if item_data.position is not None:
-        item.position = item_data.position
     if item_data.is_completed is not None:
         item.is_completed = item_data.is_completed
 

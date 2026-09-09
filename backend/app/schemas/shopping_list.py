@@ -8,7 +8,6 @@ class ListItemBase(BaseModel):
     quantity: int = 1
     unit: Optional[str] = None
     is_completed: bool = False
-    position: int = 0
 
 
 class ListItemCreate(ListItemBase):
@@ -20,7 +19,6 @@ class ListItemUpdate(BaseModel):
     quantity: Optional[int] = None
     unit: Optional[str] = None
     is_completed: Optional[bool] = None
-    position: Optional[int] = None
 
 
 class ListItemResponse(ListItemBase):
@@ -34,7 +32,6 @@ class ListItemResponse(ListItemBase):
 
 class ShoppingListBase(BaseModel):
     title: str
-    description: Optional[str] = None
 
 
 class ShoppingListCreate(ShoppingListBase):
@@ -43,8 +40,6 @@ class ShoppingListCreate(ShoppingListBase):
 
 class ShoppingListUpdate(BaseModel):
     title: Optional[str] = None
-    description: Optional[str] = None
-    is_archived: Optional[bool] = None
 
 
 class ShoppingListResponse(ShoppingListBase):
