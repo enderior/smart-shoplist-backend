@@ -247,6 +247,23 @@ async def add_item_to_list(
     if not product:
         db.add(Product(name=item_data.name, normalized_name=normalized))
 
+    # 3. История покупок — записываем при добавлении товара (upsert)
+    purchase = await db.execute(
+        select(PurchaseHistory).where(
+            PurchaseHistory.user_id == current_user.id,
+            PurchaseHistory.product_name == item_data.name
+        )
+    )
+    purchase = purchase.scalar_one_or_none()
+    if purchase:
+        purchase.purchased_at = datetime.now(timezone.utc)
+    else:
+        db.add(PurchaseHistory(
+            user_id=current_user.id,
+            product_name=item_data.name,
+            purchased_at=datetime.now(timezone.utc)
+        ))
+
     await db.commit()
     await db.refresh(new_item)
     return new_item
@@ -283,11 +300,22 @@ async def update_item(
         item.is_completed = item_data.is_completed
 
     if not old_completed and item.is_completed is True:
-        history_entry = PurchaseHistory(
-            user_id=current_user.id,
-            product_name=item.name
+        # Обновляем дату покупки, если запись уже есть, иначе — создаём
+        purchase = await db.execute(
+            select(PurchaseHistory).where(
+                PurchaseHistory.user_id == current_user.id,
+                PurchaseHistory.product_name == item.name
+            )
         )
-        db.add(history_entry)
+        purchase = purchase.scalar_one_or_none()
+        if purchase:
+            purchase.purchased_at = datetime.now(timezone.utc)
+        else:
+            db.add(PurchaseHistory(
+                user_id=current_user.id,
+                product_name=item.name,
+                purchased_at=datetime.now(timezone.utc)
+            ))
 
     await db.commit()
     await db.refresh(item)
