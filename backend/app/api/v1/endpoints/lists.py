@@ -2,12 +2,15 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
+from datetime import datetime, timezone
 from app.core.database import get_db
 from app.core.dependencies import get_current_active_user
 from app.models.user import User
 from app.models.shopping_list import ShoppingList, ListItem
+from app.models.search_history import SearchHistory
 from app.models.purchase_history import PurchaseHistory
-from app.models.list_member import ListMember  # Добавлен импорт
+from app.models.product import Product
+from app.models.list_member import ListMember
 from app.schemas.shopping_list import (
     ShoppingListCreate,
     ShoppingListUpdate,
@@ -221,6 +224,29 @@ async def add_item_to_list(
         unit=item_data.unit,
     )
     db.add(new_item)
+
+    # 1. Личная история поиска
+    history = await db.execute(
+        select(SearchHistory).where(
+            SearchHistory.user_id == current_user.id,
+            SearchHistory.product_name == item_data.name
+        )
+    )
+    history = history.scalar_one_or_none()
+    if history:
+        history.created_at = datetime.now(timezone.utc)
+    else:
+        db.add(SearchHistory(user_id=current_user.id, product_name=item_data.name))
+
+    # 2. Глобальная база товаров
+    normalized = item_data.name.strip().lower()
+    product = await db.execute(
+        select(Product).where(Product.normalized_name == normalized)
+    )
+    product = product.scalar_one_or_none()
+    if not product:
+        db.add(Product(name=item_data.name, normalized_name=normalized))
+
     await db.commit()
     await db.refresh(new_item)
     return new_item
