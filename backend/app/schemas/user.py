@@ -37,6 +37,11 @@ class UserUpdate(BaseModel):
     birth_date: Optional[date] = None
 
 
+class UserPasswordUpdate(BaseModel):
+    old_password: str
+    new_password: str
+
+
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"

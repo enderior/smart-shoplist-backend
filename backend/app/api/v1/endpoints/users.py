@@ -1,13 +1,14 @@
 import os
 import shutil
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.core.database import get_db
 from app.core.dependencies import get_current_active_user
+from app.core.security import verify_password, get_password_hash
 from app.models.user import User
-from app.schemas.user import UserResponse, UserUpdate
+from app.schemas.user import UserResponse, UserUpdate, UserPasswordUpdate
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -32,6 +33,41 @@ async def get_all_users(db: AsyncSession = Depends(get_db)):
     return users
 
 
+# ========== PUT /users/me/password (смена пароля) ==========
+
+@router.put("/me/password")
+async def change_password(
+        data: UserPasswordUpdate,
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_active_user)
+):
+    """
+    Смена пароля для залогиненного пользователя.
+    Требует указания старого пароля.
+    """
+    # 1. Проверяем старый пароль
+    if not verify_password(data.old_password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Неверный текущий пароль"
+        )
+
+    # 2. Проверяем, что новый пароль отличается от старого
+    if verify_password(data.new_password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Новый пароль должен отличаться от текущего"
+        )
+
+    # 3. Хешируем и сохраняем новый пароль
+    current_user.hashed_password = get_password_hash(data.new_password)
+    await db.commit()
+
+    return {"message": "Пароль успешно изменён"}
+
+
+# ========== GET /users/{user_id} ==========
+
 @router.get("/{user_id}", response_model=UserResponse)
 async def get_user(user_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User).where(User.id == user_id))
@@ -53,7 +89,6 @@ async def update_user(
 
     # 1. Обновляем email (только если он передан и отличается от текущего)
     if user_data.email is not None and user_data.email != current_user.email:
-        # Проверяем уникальность email
         existing = await db.execute(select(User).where(User.email == user_data.email))
         if existing.scalar_one_or_none():
             raise HTTPException(status_code=400, detail="Email уже используется")
@@ -61,7 +96,6 @@ async def update_user(
 
     # 2. Обновляем username (только если он передан и отличается от текущего)
     if user_data.username is not None and user_data.username != current_user.username:
-        # Проверяем уникальность username
         existing = await db.execute(select(User).where(User.username == user_data.username))
         if existing.scalar_one_or_none():
             raise HTTPException(status_code=400, detail="Username уже используется")
