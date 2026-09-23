@@ -42,6 +42,20 @@ class UserPasswordUpdate(BaseModel):
     new_password: str
 
 
+# ========== ВОССТАНОВЛЕНИЕ ПАРОЛЯ ==========
+
+class ResetRequest(BaseModel):
+    """Запрос на сброс пароля. Принимает email."""
+    email: EmailStr
+
+
+class ResetPasswordData(BaseModel):
+    """Сброс пароля по коду. Принимает email, код и новый пароль."""
+    email: EmailStr
+    code: str = Field(..., min_length=6, max_length=6)
+    new_password: str = Field(..., min_length=6)
+
+
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
