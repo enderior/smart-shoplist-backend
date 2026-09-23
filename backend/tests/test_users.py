@@ -2,6 +2,7 @@ import pytest
 from httpx import AsyncClient
 from datetime import date
 
+
 @pytest.mark.asyncio
 async def test_update_user(client: AsyncClient):
     # Регистрация
@@ -152,3 +153,91 @@ async def test_upload_avatar(client: AsyncClient):
     assert del_resp.status_code == 200
     user_resp = await client.get("/users/me", headers=headers)
     assert user_resp.json()["avatar_url"] is None
+
+
+# ========== ТЕСТЫ ДЛЯ СМЕНЫ ПАРОЛЯ ==========
+
+@pytest.mark.asyncio
+async def test_change_password_success(client: AsyncClient):
+    """Успешная смена пароля."""
+    await client.post("/auth/register", json={
+        "email": "changepass@example.com",
+        "username": "changepass",
+        "password": "oldpass123"
+    })
+    login_resp = await client.post("/auth/login", data={
+        "username": "changepass@example.com",
+        "password": "oldpass123"
+    })
+    token = login_resp.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Меняем пароль
+    resp = await client.put("/users/me/password", json={
+        "old_password": "oldpass123",
+        "new_password": "newpass456"
+    }, headers=headers)
+    assert resp.status_code == 200
+    assert "успешно изменён" in resp.json()["message"]
+
+    # Проверяем, что со старым паролем войти нельзя
+    old_login = await client.post("/auth/login", data={
+        "username": "changepass@example.com",
+        "password": "oldpass123"
+    })
+    assert old_login.status_code == 401
+
+    # Проверяем, что с новым паролем вход работает
+    new_login = await client.post("/auth/login", data={
+        "username": "changepass@example.com",
+        "password": "newpass456"
+    })
+    assert new_login.status_code == 200
+    assert "access_token" in new_login.json()
+
+
+@pytest.mark.asyncio
+async def test_change_password_wrong_old(client: AsyncClient):
+    """Неверный старый пароль — ошибка 400."""
+    await client.post("/auth/register", json={
+        "email": "wrongold@example.com",
+        "username": "wrongold",
+        "password": "correct"
+    })
+    login_resp = await client.post("/auth/login", data={
+        "username": "wrongold@example.com",
+        "password": "correct"
+    })
+    token = login_resp.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    resp = await client.put("/users/me/password", json={
+        "old_password": "incorrect",
+        "new_password": "newpass456"
+    }, headers=headers)
+    assert resp.status_code == 400
+    assert "Неверный текущий пароль" in resp.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_change_password_same_as_old(client: AsyncClient):
+    """Новый пароль совпадает со старым — ошибка 400."""
+    await client.post("/auth/register", json={
+        "email": "samepass@example.com",
+        "username": "samepass",
+        "password": "samepass123"
+    })
+    login_resp = await client.post("/auth/login", data={
+        "username": "samepass@example.com",
+        "password": "samepass123"
+    })
+    token = login_resp.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    resp = await client.put("/users/me/password", json={
+        "old_password": "samepass123",
+        "new_password": "samepass123"
+    }, headers=headers)
+    assert resp.status_code == 400
+    assert "должен отличаться" in resp.json()["detail"]
+    assert "должен отличаться" in resp.json()["detail"]

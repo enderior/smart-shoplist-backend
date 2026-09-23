@@ -110,3 +110,56 @@ async def test_purchase_history_pagination(client: AsyncClient):
     ids1 = {item["id"] for item in data1}
     ids2 = {item["id"] for item in data2}
     assert ids1.isdisjoint(ids2)
+
+
+@pytest.mark.asyncio
+async def test_purchase_history_no_duplicates(client: AsyncClient):
+    """Повторное добавление того же товара не создаёт дубль."""
+    await client.post("/auth/register", json={
+        "email": "dedup@example.com",
+        "username": "dedupuser",
+        "password": "pass"
+    })
+    login_resp = await client.post("/auth/login", data={
+        "username": "dedup@example.com",
+        "password": "pass"
+    })
+    token = login_resp.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    list_resp = await client.post("/lists/", json={"title": "Дедуп"}, headers=headers)
+    list_id = list_resp.json()["id"]
+
+    # Добавляем товар дважды
+    await client.post(f"/lists/{list_id}/items", json={"name": "Молоко"}, headers=headers)
+    await client.post(f"/lists/{list_id}/items", json={"name": "Молоко"}, headers=headers)
+
+    history = await client.get("/purchase-history/", headers=headers)
+    assert history.status_code == 200
+    names = [item["product_name"] for item in history.json()]
+    assert names.count("Молоко") == 1
+
+
+@pytest.mark.asyncio
+async def test_purchase_history_written_on_add(client: AsyncClient):
+    """Товар попадает в историю сразу при добавлении в список."""
+    await client.post("/auth/register", json={
+        "email": "addhist@example.com",
+        "username": "addhist",
+        "password": "pass"
+    })
+    login_resp = await client.post("/auth/login", data={
+        "username": "addhist@example.com",
+        "password": "pass"
+    })
+    token = login_resp.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    list_resp = await client.post("/lists/", json={"title": "Добавление"}, headers=headers)
+    list_id = list_resp.json()["id"]
+
+    await client.post(f"/lists/{list_id}/items", json={"name": "Сыр"}, headers=headers)
+
+    history = await client.get("/purchase-history/", headers=headers)
+    names = [item["product_name"] for item in history.json()]
+    assert "Сыр" in names

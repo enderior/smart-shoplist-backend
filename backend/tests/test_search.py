@@ -96,3 +96,32 @@ async def test_search_suggestions_from_purchase_history(client: AsyncClient):
     assert len(suggestions) > 0, "Подсказки из истории не найдены"
     # Проверяем, что в названиях есть слово "продукт"
     assert any("продукт" in s.lower() for s in suggestions)
+
+
+@pytest.mark.asyncio
+async def test_search_suggestions_from_history(client: AsyncClient):
+    await client.post("/auth/register", json={
+        "email": "histsearch@example.com",
+        "username": "histsearch",
+        "password": "pass"
+    })
+    login_resp = await client.post("/auth/login", data={
+        "username": "histsearch@example.com",
+        "password": "pass"
+    })
+    token = login_resp.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    list_resp = await client.post("/lists/", json={"title": "История"}, headers=headers)
+    list_id = list_resp.json()["id"]
+
+    # Добавляем товар, которого нет в списках
+    await client.post(f"/lists/{list_id}/items", json={"name": "Уникальный товар 123"}, headers=headers)
+
+    # Удаляем список, чтобы товар исчез из list_items
+    await client.delete(f"/lists/{list_id}", headers=headers)
+
+    # Но в истории поиска он остался
+    resp = await client.get("/search/suggestions?q=Уникальный", headers=headers)
+    assert resp.status_code == 200
+    assert "Уникальный товар 123" in resp.json()["suggestions"]
