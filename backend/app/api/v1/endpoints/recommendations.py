@@ -1,6 +1,9 @@
+from datetime import timedelta, timezone
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select
+
 from app.core.database import get_db
 from app.core.dependencies import get_current_active_user
 from app.models.user import User
@@ -10,6 +13,18 @@ from app.models.purchase_history import PurchaseHistory
 from app.data.associations import STATIC_ASSOCIATIONS
 
 router = APIRouter(prefix="/recommendations", tags=["Recommendations"])
+
+# Окно, в пределах которого покупки считаются «одним походом в магазин»
+PURCHASE_WINDOW = timedelta(hours=3)
+
+
+def _to_utc(dt):
+    """Приводит naive datetime к aware UTC. Нужно для сравнения на SQLite."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
 
 
 @router.get("/list/{list_id}")
@@ -21,8 +36,9 @@ async def get_recommendations_for_list(
     """
     Возвращает рекомендации для указанного списка.
     Доступен владельцу и участникам (read/write).
+    Объединяет статические ассоциации и историю покупок.
     """
-    # 1. Проверяем список (владелец или участник)
+    # 1. Проверяем доступ к списку
     result = await db.execute(
         select(ShoppingList).where(ShoppingList.id == list_id)
     )
@@ -40,7 +56,7 @@ async def get_recommendations_for_list(
         if not member.scalar_one_or_none():
             raise HTTPException(status_code=404, detail="List not found")
 
-    # 2. Товары из списка (lowercase)
+    # 2. Товары из списка (нормализуем)
     items_result = await db.execute(
         select(ListItem.name).where(ListItem.list_id == list_id)
     )
@@ -51,56 +67,63 @@ async def get_recommendations_for_list(
 
     # 3. Статические рекомендации
     static_scores = {}
-    for item_name in existing_items:
-        if item_name in STATIC_ASSOCIATIONS:
-            for confidence, product in STATIC_ASSOCIATIONS[item_name]:
+    for item_lower in existing_items:
+        if item_lower in STATIC_ASSOCIATIONS:
+            for confidence, product in STATIC_ASSOCIATIONS[item_lower]:
                 product_lower = product.strip().lower()
                 if product_lower not in existing_items:
-                    static_scores[product] = static_scores.get(product, 0) + confidence
+                    static_scores[product_lower] = (
+                        static_scores.get(product_lower, 0) + confidence
+                    )
 
-    # 4. Динамические рекомендации из истории (case-insensitive)
+    # 4. Динамические рекомендации из истории покупок (Python-side,
+    #    чтобы не зависеть от LOWER() в SQLite для кириллицы).
+    history_result = await db.execute(
+        select(PurchaseHistory.product_name, PurchaseHistory.purchased_at)
+        .where(PurchaseHistory.user_id == current_user.id)
+    )
+    history = [
+        (name.strip().lower(), _to_utc(dt))
+        for name, dt in history_result.all()
+    ]
+
     dynamic_scores = {}
-    for item_name in existing_items:
-        item_lower = item_name.lower()
+    for item_lower in existing_items:
+        # Все даты покупки текущего товара
+        item_dates = [dt for name, dt in history if name == item_lower and dt]
+        if not item_dates:
+            continue
 
-        date_subq = (
-            select(PurchaseHistory.purchased_at)
-            .where(
-                PurchaseHistory.user_id == current_user.id,
-                func.lower(PurchaseHistory.product_name) == item_lower  # ← ФИКС #1
-            )
-            .subquery()
-        )
+        # Считаем, сколько раз другие товары покупались «вместе» с ним
+        counts = {}
+        for other_name, other_dt in history:
+            if other_name == item_lower or other_dt is None:
+                continue
+            for item_dt in item_dates:
+                if abs(other_dt - item_dt) <= PURCHASE_WINDOW:
+                    counts[other_name] = counts.get(other_name, 0) + 1
+                    break  # не считаем один и тот же other много раз
 
-        hist_result = await db.execute(
-            select(PurchaseHistory.product_name, func.count().label("cnt"))
-            .where(
-                PurchaseHistory.user_id == current_user.id,
-                PurchaseHistory.purchased_at.in_(select(date_subq.c.purchased_at)),
-                func.lower(PurchaseHistory.product_name) != item_lower  # ← ФИКС #1
-            )
-            .group_by(PurchaseHistory.product_name)
-            .order_by(func.count().desc())
-            .limit(10)
-        )
+        if not counts:
+            continue
 
-        rows = hist_result.all()
-        if rows:
-            max_cnt = max(row[1] for row in rows)
-            for product, cnt in rows:
-                product_lower = product.strip().lower()
-                if product_lower not in existing_items:
-                    confidence = cnt / max_cnt if max_cnt > 0 else 0
-                    dynamic_scores[product] = dynamic_scores.get(product, 0) + confidence
+        max_cnt = max(counts.values())
+        for product_lower, cnt in counts.items():
+            if product_lower not in existing_items:
+                confidence = cnt / max_cnt
+                dynamic_scores[product_lower] = (
+                    dynamic_scores.get(product_lower, 0) + confidence
+                )
 
-    # 5. Объединяем
+    # 5. Объединяем: динамика с весом 0.7
     final_scores = {}
     for product, score in static_scores.items():
         final_scores[product] = score
     for product, score in dynamic_scores.items():
         final_scores[product] = final_scores.get(product, 0) + score * 0.7
 
+    # 6. Топ-5
     sorted_products = sorted(final_scores.items(), key=lambda x: x[1], reverse=True)
-    top_5_products = [product for product, _ in sorted_products[:5]]
+    top_5 = [product for product, _ in sorted_products[:5]]
 
-    return {"recommendations": top_5_products, "list_id": list_id}
+    return {"recommendations": top_5, "list_id": list_id}

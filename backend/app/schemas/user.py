@@ -12,8 +12,8 @@ class UserBase(BaseModel):
 
 
 class UserCreate(UserBase):
-    # bcrypt обрезает >72 байт — ограничиваем сверху.
-    # min_length не задаём, чтобы не ломать существующие тесты/клиентов.
+    # bcrypt молча обрезает >72 байт — ограничиваем сверху.
+    # min_length не задаём, чтобы не ломать существующих клиентов.
     password: str = Field(..., max_length=72)
 
 
@@ -47,12 +47,12 @@ class UserPasswordUpdate(BaseModel):
 # ========== ВОССТАНОВЛЕНИЕ ПАРОЛЯ ==========
 
 class ResetRequest(BaseModel):
-    """Запрос на сброс пароля. Принимает email."""
+    """Запрос на сброс пароля."""
     email: EmailStr
 
 
 class ResetPasswordData(BaseModel):
-    """Сброс пароля по коду. Принимает email, код и новый пароль."""
+    """Сброс пароля по коду."""
     email: EmailStr
     code: str = Field(..., min_length=6, max_length=6)
     new_password: str = Field(..., max_length=72)
@@ -61,8 +61,3 @@ class ResetPasswordData(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
-
-
-class TokenData(BaseModel):
-    username: Optional[str] = None
-    phone: Optional[str] = None

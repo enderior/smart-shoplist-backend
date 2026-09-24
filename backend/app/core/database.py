@@ -7,7 +7,8 @@ DATABASE_URL = settings.DATABASE_URL or settings.async_database_url
 engine = create_async_engine(
     DATABASE_URL,
     echo=settings.DEBUG,
-    future=True
+    future=True,
+    pool_pre_ping=True,  # защита от транзиентных обрывов соединения
 )
 
 AsyncSessionLocal = sessionmaker(

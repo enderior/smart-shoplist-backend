@@ -21,7 +21,6 @@ logger = logging.getLogger(__name__)
 @router.post("/register", status_code=status.HTTP_201_CREATED)
 async def register(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
     """Регистрация нового пользователя."""
-    # Мягкая MX-валидация (только лог, не блокируем) — ФИКС #7
     if not check_mx_record(user_data.email):
         logger.warning(f"Регистрация с доменом без MX: {user_data.email}")
 
@@ -86,14 +85,12 @@ async def request_password_reset(data: ResetRequest, db: AsyncSession = Depends(
     user = user.scalar_one_or_none()
 
     if not user:
-        # Не раскрываем, существует ли пользователь
         return {"message": "Если пользователь с таким email существует, мы отправили код для сброса пароля"}
 
     await db.execute(
         delete(PasswordResetToken).where(PasswordResetToken.user_id == user.id)
     )
 
-    # Криптостойкий код — ФИКС #2
     code = f"{secrets.randbelow(1_000_000):06d}"
     expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
 
