@@ -1,15 +1,16 @@
-﻿from fastapi import FastAPI
+﻿import os
+from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from fastapi.staticfiles import StaticFiles
 from app.core.config import settings
-from app.core.database import engine, Base
-from app.models import User, ShoppingList, ListItem, PurchaseHistory
+from app.core.database import engine
+from app import models  # noqa: F401 — регистрирует все модели в Base.metadata
 from app.api.v1.endpoints import users, auth, lists, recommendations, purchase_history, search, shared_lists
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Таблицы создаются через Alembic, автоматическое создание отключено
+    # Таблицы создаются через Alembic
     yield
     await engine.dispose()
 
@@ -21,9 +22,10 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# ФИКС #6: создаём папку до mount
+os.makedirs("static", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# Подключаем роутеры
 app.include_router(users.router)
 app.include_router(lists.router)
 app.include_router(shared_lists.router)

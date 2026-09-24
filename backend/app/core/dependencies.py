@@ -6,7 +6,6 @@ from app.core.database import get_db
 from app.core.security import decode_access_token
 from app.models.user import User
 
-# Указываем URL, где клиент может получить токен (для документации Swagger)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 
@@ -22,18 +21,21 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
 
-    # 1. Декодируем токен
     payload = decode_access_token(token)
     if payload is None:
         raise credentials_exception
 
-    # 2. Берём username из токена
     user_id = payload.get("sub")
     if user_id is None:
         raise credentials_exception
 
-    # 3. Ищем пользователя в базе данных
-    result = await db.execute(select(User).where(User.id == int(user_id)))
+    # ФИКС #3: safe int()
+    try:
+        user_id_int = int(user_id)
+    except (TypeError, ValueError):
+        raise credentials_exception
+
+    result = await db.execute(select(User).where(User.id == user_id_int))
     user = result.scalar_one_or_none()
 
     if user is None:
@@ -45,7 +47,7 @@ async def get_current_user(
 async def get_current_active_user(
         current_user: User = Depends(get_current_user)
 ) -> User:
-    """Проверяет, активен ли пользователь (например, не заблокирован)."""
+    """Проверяет, активен ли пользователь."""
     if not current_user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

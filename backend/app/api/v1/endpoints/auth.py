@@ -2,12 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
-from sqlalchemy.sql import func
 from datetime import datetime, timedelta, timezone
 import secrets
-import random
 import logging
-from pydantic import BaseModel
 
 from app.core.database import get_db
 from app.core.security import get_password_hash, verify_password, create_access_token
@@ -24,6 +21,10 @@ logger = logging.getLogger(__name__)
 @router.post("/register", status_code=status.HTTP_201_CREATED)
 async def register(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
     """Регистрация нового пользователя."""
+    # Мягкая MX-валидация (только лог, не блокируем) — ФИКС #7
+    if not check_mx_record(user_data.email):
+        logger.warning(f"Регистрация с доменом без MX: {user_data.email}")
+
     result = await db.execute(
         select(User).where(
             (User.email == user_data.email) | (User.username == user_data.username)
@@ -75,16 +76,11 @@ async def login(
 
 @router.post("/request-reset")
 async def request_password_reset(data: ResetRequest, db: AsyncSession = Depends(get_db)):
-    """
-    Запрос на сброс пароля.
-    Принимает JSON: {"email": "user@example.com"}
-    Генерирует 6-значный код и отправляет его на email.
-    """
+    """Запрос на сброс пароля: генерирует 6-значный код и отправляет на email."""
     email = data.email
 
-    # Мягкая MX-валидация
     if not check_mx_record(email):
-        logger.warning(f"Регистрация/сброс с доменом без MX: {email}")
+        logger.warning(f"Сброс пароля с доменом без MX: {email}")
 
     user = await db.execute(select(User).where(User.email == email))
     user = user.scalar_one_or_none()
@@ -93,13 +89,12 @@ async def request_password_reset(data: ResetRequest, db: AsyncSession = Depends(
         # Не раскрываем, существует ли пользователь
         return {"message": "Если пользователь с таким email существует, мы отправили код для сброса пароля"}
 
-    # Удаляем старые токены
     await db.execute(
         delete(PasswordResetToken).where(PasswordResetToken.user_id == user.id)
     )
 
-    # Генерируем 6-значный код
-    code = f"{random.randint(0, 999999):06d}"
+    # Криптостойкий код — ФИКС #2
+    code = f"{secrets.randbelow(1_000_000):06d}"
     expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
 
     reset_token = PasswordResetToken(
@@ -111,7 +106,6 @@ async def request_password_reset(data: ResetRequest, db: AsyncSession = Depends(
     db.add(reset_token)
     await db.commit()
 
-    # Отправляем код (в dev-режиме печатается в консоль)
     send_reset_code_email(email, code)
 
     return {"message": "Код для сброса пароля отправлен на ваш email"}
@@ -123,13 +117,11 @@ async def reset_password(data: ResetPasswordData, db: AsyncSession = Depends(get
     code = data.code
     new_password = data.new_password
 
-    # Находим пользователя
     user = await db.execute(select(User).where(User.email == email))
     user = user.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=400, detail="Недействительный код")
 
-    # Находим последний активный токен пользователя
     reset_token = await db.execute(
         select(PasswordResetToken)
         .where(PasswordResetToken.user_id == user.id)
@@ -140,27 +132,22 @@ async def reset_password(data: ResetPasswordData, db: AsyncSession = Depends(get
     if not reset_token:
         raise HTTPException(status_code=400, detail="Недействительный код")
 
-    # Проверка попыток
     if reset_token.attempts >= 5:
         raise HTTPException(status_code=400, detail="Слишком много попыток, запросите новый код")
 
-    # Проверка срока
     expires_at = reset_token.expires_at
     if expires_at.tzinfo is None:
         expires_at = expires_at.replace(tzinfo=timezone.utc)
     if expires_at < datetime.now(timezone.utc):
         raise HTTPException(status_code=400, detail="Код истёк")
 
-    # Проверка кода
     if reset_token.code != code:
         reset_token.attempts += 1
         await db.commit()
         raise HTTPException(status_code=400, detail="Недействительный код")
 
-    # Всё ок — меняем пароль
     user.hashed_password = get_password_hash(new_password)
 
-    # Удаляем токен
     await db.delete(reset_token)
     await db.commit()
 
