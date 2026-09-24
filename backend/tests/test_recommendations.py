@@ -162,3 +162,38 @@ async def test_recommendations_with_purchase_history(client: AsyncClient):
     assert rec_resp.status_code == 200
     recs = rec_resp.json()["recommendations"]
     assert "масло" in recs
+
+
+@pytest.mark.asyncio
+async def test_recommendations_with_uppercase_names(client: AsyncClient):
+    """Динамические рекомендации работают с заглавными буквами."""
+    await client.post("/auth/register", json={
+        "email": "upper@example.com",
+        "username": "upperuser",
+        "password": "pass"
+    })
+    login_resp = await client.post("/auth/login", data={
+        "username": "upper@example.com",
+        "password": "pass"
+    })
+    token = login_resp.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    list1 = await client.post("/lists/", json={"title": "Первый"}, headers=headers)
+    list1_id = list1.json()["id"]
+    item1 = await client.post(f"/lists/{list1_id}/items", json={"name": "Хлеб"}, headers=headers)
+    item1_id = item1.json()["id"]
+    item2 = await client.post(f"/lists/{list1_id}/items", json={"name": "Масло"}, headers=headers)
+    item2_id = item2.json()["id"]
+
+    await client.put(f"/lists/items/{item1_id}", json={"is_completed": True}, headers=headers)
+    await client.put(f"/lists/items/{item2_id}", json={"is_completed": True}, headers=headers)
+
+    list2 = await client.post("/lists/", json={"title": "Второй"}, headers=headers)
+    list2_id = list2.json()["id"]
+    await client.post(f"/lists/{list2_id}/items", json={"name": "хлеб"}, headers=headers)
+
+    rec_resp = await client.get(f"/recommendations/list/{list2_id}", headers=headers)
+    assert rec_resp.status_code == 200
+    recs_lower = [r.lower() for r in rec_resp.json()["recommendations"]]
+    assert "масло" in recs_lower, f"Ожидали масло, получили {recs_lower}"
