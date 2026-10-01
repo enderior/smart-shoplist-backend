@@ -37,9 +37,7 @@ class UserResponse(UserBase):
 
 
 class UserUpdate(BaseModel):
-    email: Optional[EmailStr] = None
     username: Optional[str] = None
-    phone: Optional[str] = Field(None, pattern=r'^\+?[1-9]\d{1,14}$')
     birth_date: Optional[date] = None
 
 
@@ -60,6 +58,26 @@ class ResetPasswordData(BaseModel):
     email: EmailStr
     code: str = Field(..., min_length=6, max_length=6)
     new_password: str = Field(..., min_length=PASSWORD_MIN, max_length=PASSWORD_MAX)
+
+
+# ========== СМЕНА EMAIL / PHONE С ПОДТВЕРЖДЕНИЕМ ==========
+
+class EmailChangeRequest(BaseModel):
+    new_email: EmailStr
+
+
+class EmailChangeConfirm(BaseModel):
+    new_email: EmailStr
+    code: str = Field(..., min_length=6, max_length=6)
+
+
+class PhoneChangeRequest(BaseModel):
+    new_phone: str = Field(..., pattern=r'^\+?[1-9]\d{1,14}$')
+
+
+class PhoneChangeConfirm(BaseModel):
+    new_phone: str = Field(..., pattern=r'^\+?[1-9]\d{1,14}$')
+    code: str = Field(..., min_length=6, max_length=6)
 
 
 class Token(BaseModel):

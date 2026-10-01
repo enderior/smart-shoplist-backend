@@ -6,9 +6,12 @@ from email.message import EmailMessage
 logger = logging.getLogger(__name__)
 
 
-def send_reset_code_email(to_email: str, code: str) -> None:
-    """Отправляет код на email. Если SMTP не настроен — пишет в консоль.
-    Ошибки SMTP логируются, но не пробрасываются."""
+def send_code_email(to_email: str, code: str, subject: str, intro: str) -> None:
+    """
+    Универсальная отправка кода по email.
+    Если SMTP не настроен — печатает в консоль (dev-режим).
+    Ошибки SMTP логируются, но не пробрасываются.
+    """
     smtp_host = os.getenv("SMTP_HOST")
     smtp_port = int(os.getenv("SMTP_PORT", "465"))
     smtp_user = os.getenv("SMTP_USER")
@@ -17,16 +20,16 @@ def send_reset_code_email(to_email: str, code: str) -> None:
     mail_from_name = os.getenv("MAIL_FROM_NAME", "Smart ShopList")
 
     if not smtp_host or not smtp_user or not smtp_password:
-        print(f"📧 [DEV] Код для сброса пароля для {to_email}: {code}")
+        print(f"📧 [DEV] {subject} для {to_email}: {code}")
         return
 
     msg = EmailMessage()
-    msg["Subject"] = "Сброс пароля — Smart ShopList"
+    msg["Subject"] = subject
     msg["From"] = f"{mail_from_name} <{mail_from}>"
     msg["To"] = to_email
     msg.set_content(
-        f"Ваш код для сброса пароля: {code}\n\n"
-        f"Код действует 15 минут. Если вы не запрашивали сброс — просто проигнорируйте письмо."
+        f"{intro}: {code}\n\n"
+        f"Код действует 15 минут. Если вы не запрашивали это — просто проигнорируйте письмо."
     )
 
     try:
@@ -39,7 +42,36 @@ def send_reset_code_email(to_email: str, code: str) -> None:
                 server.starttls()
                 server.login(smtp_user, smtp_password)
                 server.send_message(msg)
-        print(f"📧 Письмо с кодом отправлено на {to_email}")
+        print(f"📧 Письмо отправлено на {to_email}")
     except Exception as e:
         logger.error(f"Не удалось отправить письмо на {to_email}: {e}")
-        print(f"📧 [DEV-FALLBACK] Код для сброса пароля для {to_email}: {code}")
+        print(f"📧 [DEV-FALLBACK] {subject} для {to_email}: {code}")
+
+
+# ========== Обёртки для конкретных сценариев ==========
+
+def send_reset_code_email(to_email: str, code: str) -> None:
+    send_code_email(
+        to_email=to_email,
+        code=code,
+        subject="Сброс пароля — Smart ShopList",
+        intro="Ваш код для сброса пароля",
+    )
+
+
+def send_email_change_code_email(to_new_email: str, code: str) -> None:
+    send_code_email(
+        to_email=to_new_email,
+        code=code,
+        subject="Подтверждение нового email — Smart ShopList",
+        intro="Ваш код для подтверждения нового email",
+    )
+
+
+def send_phone_change_code_email(to_email: str, code: str) -> None:
+    send_code_email(
+        to_email=to_email,
+        code=code,
+        subject="Подтверждение нового телефона — Smart ShopList",
+        intro="Ваш код для подтверждения нового телефона",
+    )

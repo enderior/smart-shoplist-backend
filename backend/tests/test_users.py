@@ -28,72 +28,24 @@ async def test_update_user(client: AsyncClient):
     assert data1["username"] == "newusername"
     assert data1["email"] == "update@example.com"  # email не изменился
 
-    # 2. Обновляем только email
+    # 2. Обновляем только birth_date
     resp2 = await client.patch("/users/me", json={
-        "email": "newemail@example.com"
+        "birth_date": "1990-01-01"
     }, headers=headers)
     assert resp2.status_code == 200
     data2 = resp2.json()
-    assert data2["email"] == "newemail@example.com"
+    assert data2["birth_date"] == "1990-01-01"
     assert data2["username"] == "newusername"  # username не изменился
 
-    # 3. Обновляем только phone
+    # 3. Обновляем оба поля сразу
     resp3 = await client.patch("/users/me", json={
-        "phone": "+79991112233"
+        "username": "fullupdate",
+        "birth_date": "1995-05-05"
     }, headers=headers)
     assert resp3.status_code == 200
     data3 = resp3.json()
-    assert data3["phone"] == "+79991112233"
-
-    # 4. Обновляем только birth_date
-    resp4 = await client.patch("/users/me", json={
-        "birth_date": "1990-01-01"
-    }, headers=headers)
-    assert resp4.status_code == 200
-    data4 = resp4.json()
-    assert data4["birth_date"] == "1990-01-01"
-
-    # 5. Обновляем все поля сразу
-    resp5 = await client.patch("/users/me", json={
-        "username": "fullupdate",
-        "email": "full@example.com",
-        "phone": "+78888888888",
-        "birth_date": "1995-05-05"
-    }, headers=headers)
-    assert resp5.status_code == 200
-    data5 = resp5.json()
-    assert data5["username"] == "fullupdate"
-    assert data5["email"] == "full@example.com"
-    assert data5["phone"] == "+78888888888"
-    assert data5["birth_date"] == "1995-05-05"
-
-
-@pytest.mark.asyncio
-async def test_update_user_unique_email(client: AsyncClient):
-    # Регистрация первого пользователя
-    await client.post("/auth/register", json={
-        "email": "first@example.com",
-        "username": "first",
-        "password": "pass123"
-    })
-    # Регистрация второго
-    await client.post("/auth/register", json={
-        "email": "second@example.com",
-        "username": "second",
-        "password": "pass123"
-    })
-    # Логин второго
-    login_resp = await client.post("/auth/login", data={
-        "username": "second@example.com",
-        "password": "pass123"
-    })
-    token = login_resp.json()["access_token"]
-    headers = {"Authorization": f"Bearer {token}"}
-
-    # Попытка сменить email на уже существующий
-    resp = await client.patch("/users/me", json={"email": "first@example.com"}, headers=headers)
-    assert resp.status_code == 400
-    assert resp.json()["detail"] == "Email уже используется"
+    assert data3["username"] == "fullupdate"
+    assert data3["birth_date"] == "1995-05-05"
 
 
 @pytest.mark.asyncio
@@ -241,3 +193,29 @@ async def test_change_password_same_as_old(client: AsyncClient):
     assert resp.status_code == 400
     assert "должен отличаться" in resp.json()["detail"]
     assert "должен отличаться" in resp.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_patch_me_ignores_email_and_phone(client: AsyncClient):
+    """PATCH /users/me не должен менять email/phone, даже если их передать."""
+    await client.post("/auth/register", json={
+        "email": "immutable@example.com",
+        "username": "immutable",
+        "password": "pass123"
+    })
+    login = await client.post("/auth/login", data={
+        "username": "immutable@example.com",
+        "password": "pass123"
+    })
+    headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+    resp = await client.patch("/users/me", json={
+        "username": "immutable2",
+        "email": "hacked@example.com",  # должно быть проигнорировано
+        "phone": "+79999999999",  # должно быть проигнорировано
+    }, headers=headers)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["username"] == "immutable2"
+    assert data["email"] == "immutable@example.com"  # не изменился
+    assert data["phone"] is None  # не изменился
