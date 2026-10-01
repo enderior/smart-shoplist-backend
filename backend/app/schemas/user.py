@@ -2,6 +2,12 @@
 from datetime import datetime, date
 from typing import Optional
 
+# Единое правило для пароля во всём API:
+#   min_length=6  — защита от пустых и слишком коротких паролей
+#   max_length=72 — bcrypt молча обрезает всё, что длиннее 72 байт
+PASSWORD_MIN = 6
+PASSWORD_MAX = 72
+
 
 class UserBase(BaseModel):
     email: EmailStr
@@ -12,9 +18,7 @@ class UserBase(BaseModel):
 
 
 class UserCreate(UserBase):
-    # bcrypt молча обрезает >72 байт — ограничиваем сверху.
-    # min_length не задаём, чтобы не ломать существующих клиентов.
-    password: str = Field(..., max_length=72)
+    password: str = Field(..., min_length=PASSWORD_MIN, max_length=PASSWORD_MAX)
 
 
 class UserLogin(BaseModel):
@@ -41,7 +45,7 @@ class UserUpdate(BaseModel):
 
 class UserPasswordUpdate(BaseModel):
     old_password: str
-    new_password: str = Field(..., max_length=72)
+    new_password: str = Field(..., min_length=PASSWORD_MIN, max_length=PASSWORD_MAX)
 
 
 # ========== ВОССТАНОВЛЕНИЕ ПАРОЛЯ ==========
@@ -55,9 +59,8 @@ class ResetPasswordData(BaseModel):
     """Сброс пароля по коду."""
     email: EmailStr
     code: str = Field(..., min_length=6, max_length=6)
-    new_password: str = Field(..., max_length=72)
+    new_password: str = Field(..., min_length=PASSWORD_MIN, max_length=PASSWORD_MAX)
 
 
 class Token(BaseModel):
     access_token: str
-    token_type: str = "bearer"

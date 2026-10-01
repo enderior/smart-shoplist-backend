@@ -8,11 +8,11 @@ async def test_update_list(client: AsyncClient):
     await client.post("/auth/register", json={
         "email": "update_list@example.com",
         "username": "updatelist",
-        "password": "pass"
+        "password": "pass123"
     })
     login_resp = await client.post("/auth/login", data={
         "username": "update_list@example.com",
-        "password": "pass"
+        "password": "pass123"
     })
     token = login_resp.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
@@ -40,11 +40,11 @@ async def test_delete_list(client: AsyncClient):
     await client.post("/auth/register", json={
         "email": "delete_list@example.com",
         "username": "deletelist",
-        "password": "pass"
+        "password": "pass123"
     })
     login_resp = await client.post("/auth/login", data={
         "username": "delete_list@example.com",
-        "password": "pass"
+        "password": "pass123"
     })
     token = login_resp.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
@@ -71,11 +71,11 @@ async def test_access_other_user_list(client: AsyncClient):
     await client.post("/auth/register", json={
         "email": "user1@example.com",
         "username": "user1",
-        "password": "pass1"
+        "password": "pass1234"
     })
     login1 = await client.post("/auth/login", data={
         "username": "user1@example.com",
-        "password": "pass1"
+        "password": "pass1234"
     })
     token1 = login1.json()["access_token"]
     headers1 = {"Authorization": f"Bearer {token1}"}
@@ -89,11 +89,11 @@ async def test_access_other_user_list(client: AsyncClient):
     await client.post("/auth/register", json={
         "email": "user2@example.com",
         "username": "user2",
-        "password": "pass2"
+        "password": "pass1235"
     })
     login2 = await client.post("/auth/login", data={
         "username": "user2@example.com",
-        "password": "pass2"
+        "password": "pass1235"
     })
     token2 = login2.json()["access_token"]
     headers2 = {"Authorization": f"Bearer {token2}"}

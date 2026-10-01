@@ -74,18 +74,18 @@ async def test_update_user_unique_email(client: AsyncClient):
     await client.post("/auth/register", json={
         "email": "first@example.com",
         "username": "first",
-        "password": "pass"
+        "password": "pass123"
     })
     # Регистрация второго
     await client.post("/auth/register", json={
         "email": "second@example.com",
         "username": "second",
-        "password": "pass"
+        "password": "pass123"
     })
     # Логин второго
     login_resp = await client.post("/auth/login", data={
         "username": "second@example.com",
-        "password": "pass"
+        "password": "pass123"
     })
     token = login_resp.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
@@ -101,16 +101,16 @@ async def test_update_user_unique_username(client: AsyncClient):
     await client.post("/auth/register", json={
         "email": "a@example.com",
         "username": "user_a",
-        "password": "pass"
+        "password": "pass123"
     })
     await client.post("/auth/register", json={
         "email": "b@example.com",
         "username": "user_b",
-        "password": "pass"
+        "password": "pass123"
     })
     login_resp = await client.post("/auth/login", data={
         "username": "b@example.com",
-        "password": "pass"
+        "password": "pass123"
     })
     token = login_resp.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
@@ -126,11 +126,11 @@ async def test_upload_avatar(client: AsyncClient):
     await client.post("/auth/register", json={
         "email": "avatar@example.com",
         "username": "avataruser",
-        "password": "pass"
+        "password": "pass123"
     })
     login_resp = await client.post("/auth/login", data={
         "username": "avatar@example.com",
-        "password": "pass"
+        "password": "pass123"
     })
     token = login_resp.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}

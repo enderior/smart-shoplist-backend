@@ -55,6 +55,13 @@ async def login(
         db: AsyncSession = Depends(get_db)
 ):
     """Вход в систему. Принимает username (email) и password."""
+    # BUG-020: пустые поля → 422, а не 401
+    if not form_data.username or not form_data.password:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Поля username и password обязательны",
+        )
+
     result = await db.execute(select(User).where(User.email == form_data.username))
     user = result.scalar_one_or_none()
 
