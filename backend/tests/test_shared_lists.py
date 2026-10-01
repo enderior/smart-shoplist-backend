@@ -447,3 +447,155 @@ async def test_write_permission_can_delete_list(client: AsyncClient):
     # Проверяем, что список действительно удалён
     get_resp = await client.get(f"/lists/{list_id}", headers=member_headers)
     assert get_resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_invite_by_email(client: AsyncClient):
+    # Регистрируем владельца и гостя
+    await client.post("/auth/register", json={
+        "email": "owner_mail@example.com",
+        "username": "owner_mail",
+        "password": "pass123"
+    })
+    login_owner = await client.post("/auth/login", data={
+        "username": "owner_mail@example.com",
+        "password": "pass123"
+    })
+    owner_token = login_owner.json()["access_token"]
+    owner_headers = {"Authorization": f"Bearer {owner_token}"}
+
+    await client.post("/auth/register", json={
+        "email": "guest_mail@example.com",
+        "username": "guest_mail",
+        "password": "pass123"
+    })
+    login_guest = await client.post("/auth/login", data={
+        "username": "guest_mail@example.com",
+        "password": "pass123"
+    })
+    guest_token = login_guest.json()["access_token"]
+    guest_headers = {"Authorization": f"Bearer {guest_token}"}
+
+    # Владелец создаёт список
+    list_resp = await client.post("/lists/", json={"title": "Поэмайл"}, headers=owner_headers)
+    assert list_resp.status_code == 201
+    list_id = list_resp.json()["id"]
+
+    # Приглашение по email
+    invite_resp = await client.post(
+        f"/shared/lists/{list_id}/invite",
+        json={"email": "guest_mail@example.com"},
+        headers=owner_headers
+    )
+    assert invite_resp.status_code == 200
+    assert "invited" in invite_resp.json()["message"]
+
+    # Гость видит расшаренный список
+    shared_resp = await client.get("/shared/lists", headers=guest_headers)
+    assert shared_resp.status_code == 200
+    assert any(lst["title"] == "Поэмайл" for lst in shared_resp.json())
+
+    # Повторное приглашение тому же адресу
+    again = await client.post(
+        f"/shared/lists/{list_id}/invite",
+        json={"email": "guest_mail@example.com"},
+        headers=owner_headers
+    )
+    assert again.status_code == 400
+
+    # Приглашение несуществующего email
+    missing = await client.post(
+        f"/shared/lists/{list_id}/invite",
+        json={"email": "no_such@example.com"},
+        headers=owner_headers
+    )
+    assert missing.status_code == 404
+
+    # Приглашение самого себя
+    self_invite = await client.post(
+        f"/shared/lists/{list_id}/invite",
+        json={"email": "owner_mail@example.com"},
+        headers=owner_headers
+    )
+    assert self_invite.status_code == 400
+
+    # Невладелец не может приглашать
+    foreign = await client.post(
+        f"/shared/lists/{list_id}/invite",
+        json={"email": "guest_mail@example.com"},
+        headers=guest_headers
+    )
+    assert foreign.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_get_list_members(client: AsyncClient):
+    # Регистрируем владельца и гостя
+    await client.post("/auth/register", json={
+        "email": "owner_members@example.com",
+        "username": "owner_members",
+        "password": "pass123"
+    })
+    login_owner = await client.post("/auth/login", data={
+        "username": "owner_members@example.com",
+        "password": "pass123"
+    })
+    owner_token = login_owner.json()["access_token"]
+    owner_headers = {"Authorization": f"Bearer {owner_token}"}
+
+    await client.post("/auth/register", json={
+        "email": "guest_members@example.com",
+        "username": "guest_members",
+        "password": "pass123"
+    })
+    login_guest = await client.post("/auth/login", data={
+        "username": "guest_members@example.com",
+        "password": "pass123"
+    })
+    guest_token = login_guest.json()["access_token"]
+    guest_headers = {"Authorization": f"Bearer {guest_token}"}
+
+    # Владелец создаёт список и приглашает гостя
+    list_resp = await client.post("/lists/", json={"title": "Список с участниками"}, headers=owner_headers)
+    assert list_resp.status_code == 201
+    list_id = list_resp.json()["id"]
+
+    invite_resp = await client.post(
+        f"/shared/lists/{list_id}/invite",
+        json={"email": "guest_members@example.com"},
+        headers=owner_headers
+    )
+    assert invite_resp.status_code == 200
+
+    # Владелец видит себя и гостя
+    members_resp = await client.get(f"/shared/lists/{list_id}/members", headers=owner_headers)
+    assert members_resp.status_code == 200
+    members = members_resp.json()
+    emails = [m["email"] for m in members]
+    assert "owner_members@example.com" in emails
+    assert "guest_members@example.com" in emails
+    owner = next(m for m in members if m["email"] == "owner_members@example.com")
+    assert owner["is_owner"] is True
+
+    # Гость тоже видит участников
+    guest_members = await client.get(f"/shared/lists/{list_id}/members", headers=guest_headers)
+    assert guest_members.status_code == 200
+
+    # Аутсайдер доступа не имеет
+    await client.post("/auth/register", json={
+        "email": "outsider@example.com",
+        "username": "outsider",
+        "password": "pass123"
+    })
+    login_outsider = await client.post("/auth/login", data={
+        "username": "outsider@example.com",
+        "password": "pass123"
+    })
+    outsider_headers = {"Authorization": f"Bearer {login_outsider.json()['access_token']}"}
+
+    no_access = await client.get(f"/shared/lists/{list_id}/members", headers=outsider_headers)
+    assert no_access.status_code == 404
+
+    # Несуществующий список
+    missing = await client.get("/shared/lists/999999/members", headers=owner_headers)
+    assert missing.status_code == 404

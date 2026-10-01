@@ -5,7 +5,7 @@ from app.core.config import settings
 from app.core.database import engine, Base
 from app.models import User, ShoppingList, ListItem, PurchaseHistory
 from app.api.v1.endpoints import users, auth, lists, recommendations, purchase_history, search, shared_lists
-
+from fastapi.middleware.cors import CORSMiddleware
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -20,6 +20,18 @@ app = FastAPI(
     debug=settings.DEBUG,
     lifespan=lifespan
 )
+
+app.add_middleware(
+    CORSMiddleware,
+    # Разрешаем любые источники: авторизация идёт по Bearer-токену (не cookie),
+    # поэтому allow_credentials=False корректно и CORS не блокирует запросы
+    # из браузера независимо от IP/порта фронтенда и смены сети.
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 

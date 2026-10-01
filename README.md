@@ -74,7 +74,7 @@ DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/smartlist
 Убедись, что PostgreSQL запущен. Создай базу данных:
 
 ```sql
-CREATE DATABASE smartlist WITH ENCODING='UTF8' LC_COLLATE='Russian_Russia.1251' LC_CTYPE='Russian_Russia.1251' TEMPLATE=template0;
+CREATE DATABASE smartlist WITH ENCODING='UTF8' LC_COLLATE='ru_RU.utf8' LC_CTYPE='ru_RU.utf8' TEMPLATE=template0;
 ```
 
 Примени миграции Alembic:
