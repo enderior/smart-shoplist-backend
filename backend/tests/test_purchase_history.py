@@ -163,3 +163,31 @@ async def test_purchase_history_written_on_add(client: AsyncClient):
     history = await client.get("/purchase-history/", headers=headers)
     names = [item["product_name"] for item in history.json()]
     assert "Сыр" in names
+
+
+@pytest.mark.asyncio
+async def test_purchase_history_no_duplicates_case_insensitive(client: AsyncClient):
+    """Один и тот же товар в разном регистре не создаёт дубль."""
+    await client.post("/auth/register", json={
+        "email": "case@example.com",
+        "username": "caseuser",
+        "password": "pass"
+    })
+    login_resp = await client.post("/auth/login", data={
+        "username": "case@example.com",
+        "password": "pass"
+    })
+    token = login_resp.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    list_resp = await client.post("/lists/", json={"title": "Case"}, headers=headers)
+    list_id = list_resp.json()["id"]
+
+    await client.post(f"/lists/{list_id}/items", json={"name": "Молоко"}, headers=headers)
+    await client.post(f"/lists/{list_id}/items", json={"name": "молоко"}, headers=headers)
+    await client.post(f"/lists/{list_id}/items", json={"name": "МОЛОКО"}, headers=headers)
+
+    history = await client.get("/purchase-history/", headers=headers)
+    assert history.status_code == 200
+    names = [item["product_name"].lower() for item in history.json()]
+    assert names.count("молоко") == 1, f"Ожидали 1 запись, получили {names}"

@@ -23,6 +23,33 @@ from app.schemas.shopping_list import (
 router = APIRouter(prefix="/lists", tags=["Shopping Lists"])
 
 
+# ========== ХЕЛПЕРЫ: регистронезависимый поиск (Python-side) ==========
+# SQLite LOWER() не понимает кириллицу, поэтому фильтруем в Python.
+
+async def _find_search_history(db: AsyncSession, user_id: int, normalized: str):
+    result = await db.execute(
+        select(SearchHistory).where(SearchHistory.user_id == user_id)
+    )
+    return next(
+        (h for h in result.scalars().all()
+         if h.product_name.strip().lower() == normalized),
+        None
+    )
+
+
+async def _find_purchase_history(db: AsyncSession, user_id: int, normalized: str):
+    result = await db.execute(
+        select(PurchaseHistory).where(PurchaseHistory.user_id == user_id)
+    )
+    return next(
+        (p for p in result.scalars().all()
+         if p.product_name.strip().lower() == normalized),
+        None
+    )
+
+
+# ========== СПИСКИ ==========
+
 @router.post("/", response_model=ShoppingListResponse, status_code=status.HTTP_201_CREATED)
 async def create_list(
         list_data: ShoppingListCreate,
@@ -93,7 +120,6 @@ async def get_list_by_id(
         current_user: User = Depends(get_current_active_user)
 ):
     """Возвращает один список по ID с его товарами."""
-    # Проверяем доступ: владелец или участник (read/write)
     result = await db.execute(
         select(ShoppingList).where(ShoppingList.id == list_id)
     )
@@ -112,7 +138,6 @@ async def get_list_by_id(
         if not member.scalar_one_or_none():
             raise HTTPException(status_code=404, detail="List not found or no access")
 
-    # Подгружаем товары
     result = await db.execute(
         select(ShoppingList)
         .where(ShoppingList.id == list_id)
@@ -124,7 +149,6 @@ async def get_list_by_id(
 
 async def check_write_permission(list_id: int, user_id: int, db: AsyncSession) -> bool:
     """Проверяет, имеет ли пользователь право write для списка."""
-    # Проверяем владельца
     list_result = await db.execute(
         select(ShoppingList).where(
             ShoppingList.id == list_id,
@@ -134,7 +158,6 @@ async def check_write_permission(list_id: int, user_id: int, db: AsyncSession) -
     if list_result.scalar_one_or_none():
         return True
 
-    # Проверяем участника с правом write
     member = await db.execute(
         select(ListMember).where(
             ListMember.list_id == list_id,
@@ -199,6 +222,8 @@ async def delete_list(
     await db.commit()
 
 
+# ========== ТОВАРЫ ==========
+
 @router.post("/{list_id}/items", response_model=ListItemResponse, status_code=status.HTTP_201_CREATED)
 async def add_item_to_list(
         list_id: int,
@@ -217,44 +242,34 @@ async def add_item_to_list(
     if not shopping_list:
         raise HTTPException(status_code=404, detail="List not found")
 
+    normalized = item_data.name.strip().lower()
+
     new_item = ListItem(
         list_id=list_id,
         name=item_data.name,
         quantity=item_data.quantity,
         unit=item_data.unit,
+        is_completed=item_data.is_completed,
     )
     db.add(new_item)
 
-    # 1. Личная история поиска
-    history = await db.execute(
-        select(SearchHistory).where(
-            SearchHistory.user_id == current_user.id,
-            SearchHistory.product_name == item_data.name
-        )
-    )
-    history = history.scalar_one_or_none()
+    # 1. Личная история поиска (Python-side case-insensitive)
+    history = await _find_search_history(db, current_user.id, normalized)
     if history:
         history.created_at = datetime.now(timezone.utc)
     else:
         db.add(SearchHistory(user_id=current_user.id, product_name=item_data.name))
 
     # 2. Глобальная база товаров
-    normalized = item_data.name.strip().lower()
-    product = await db.execute(
+    product_result = await db.execute(
         select(Product).where(Product.normalized_name == normalized)
     )
-    product = product.scalar_one_or_none()
+    product = product_result.scalar_one_or_none()
     if not product:
         db.add(Product(name=item_data.name, normalized_name=normalized))
 
-    # 3. История покупок — записываем при добавлении товара (upsert)
-    purchase = await db.execute(
-        select(PurchaseHistory).where(
-            PurchaseHistory.user_id == current_user.id,
-            PurchaseHistory.product_name == item_data.name
-        )
-    )
-    purchase = purchase.scalar_one_or_none()
+    # 3. История покупок — upsert (Python-side case-insensitive)
+    purchase = await _find_purchase_history(db, current_user.id, normalized)
     if purchase:
         purchase.purchased_at = datetime.now(timezone.utc)
     else:
@@ -277,7 +292,6 @@ async def update_item(
         current_user: User = Depends(get_current_active_user)
 ):
     """Обновляет товар. Требует права write."""
-    # Сначала получаем список, к которому относится товар
     result = await db.execute(
         select(ListItem).where(ListItem.id == item_id)
     )
@@ -300,16 +314,11 @@ async def update_item(
         item.is_completed = item_data.is_completed
 
     if not old_completed and item.is_completed is True:
-        # Обновляем дату покупки, если запись уже есть, иначе — создаём
-        purchase = await db.execute(
-            select(PurchaseHistory).where(
-                PurchaseHistory.user_id == current_user.id,
-                PurchaseHistory.product_name == item.name
-            )
-        )
-        purchase = purchase.scalar_one_or_none()
+        normalized = item.name.strip().lower()
+        purchase = await _find_purchase_history(db, current_user.id, normalized)
         if purchase:
             purchase.purchased_at = datetime.now(timezone.utc)
+            purchase.product_name = item.name
         else:
             db.add(PurchaseHistory(
                 user_id=current_user.id,

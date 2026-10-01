@@ -1,6 +1,6 @@
 ﻿from app.schemas.user import (
     UserBase, UserCreate, UserLogin, UserResponse,
-    Token, TokenData
+    Token
 )
 from app.schemas.shopping_list import (
     ListItemBase, ListItemCreate, ListItemUpdate, ListItemResponse,
@@ -8,7 +8,7 @@ from app.schemas.shopping_list import (
 )
 
 __all__ = [
-    "UserBase", "UserCreate", "UserLogin", "UserResponse", "Token", "TokenData",
+    "UserBase", "UserCreate", "UserLogin", "UserResponse", "Token",
     "ListItemBase", "ListItemCreate", "ListItemUpdate", "ListItemResponse",
     "ShoppingListBase", "ShoppingListCreate", "ShoppingListUpdate", "ShoppingListResponse"
 ]

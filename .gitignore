@@ -1,5 +1,4 @@
-# Виртуальное окружение (весь backend/.venv)
-backend/.venv/
+# Виртуальное окружение
 .venv/
 
 # Python
@@ -16,8 +15,6 @@ build/
 
 # Переменные окружения (секреты)
 .env
-backend/.env
-*.env
 
 # IDE
 .idea/
@@ -41,12 +38,12 @@ Thumbs.db
 # Временные файлы
 *.tmp
 *.bak
-backend/.env
 
 # pytest
 .pytest_cache/
 .coverage
 htmlcov/
 
-# Игнорируем все файлы в папке static/avatars/
-backend/static/avatars/
+# Пользовательские аватары — не коммитим, но .gitkeep держим
+backend/static/avatars/*
+!backend/static/avatars/.gitkeep

@@ -8,25 +8,23 @@ ALGORITHM = settings.ALGORITHM
 ACCESS_TOKEN_EXPIRE_MINUTES = settings.ACCESS_TOKEN_EXPIRE_MINUTES
 
 
-# ========== Хеширование паролей (bcrypt напрямую) ==========
 def get_password_hash(password: str) -> str:
-    """Превращает пароль в хеш с помощью bcrypt."""
     salt = bcrypt.gensalt()
     hashed = bcrypt.hashpw(password.encode('utf-8'), salt)
     return hashed.decode('utf-8')
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Проверяет, совпадает ли пароль с хешем."""
-    return bcrypt.checkpw(
-        plain_password.encode('utf-8'),
-        hashed_password.encode('utf-8')
-    )
+    try:
+        return bcrypt.checkpw(
+            plain_password.encode('utf-8'),
+            hashed_password.encode('utf-8')
+        )
+    except (ValueError, TypeError):
+        return False
 
 
-# ========== JWT токены ==========
 def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
-    """Создаёт JWT токен."""
     to_encode = data.copy()
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta
@@ -37,7 +35,6 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
 
 
 def decode_access_token(token: str) -> dict | None:
-    """Декодирует JWT токен."""
     try:
         return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
     except JWTError:
