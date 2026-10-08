@@ -23,6 +23,19 @@ from app.schemas.shopping_list import (
 router = APIRouter(prefix="/lists", tags=["Shopping Lists"])
 
 
+def _to_list_response(shopping_list: ShoppingList, is_owner: bool, items) -> ShoppingListResponse:
+    """Собирает ответ со списком товаров и признаком владельца."""
+    return ShoppingListResponse(
+        id=shopping_list.id,
+        title=shopping_list.title,
+        owner_id=shopping_list.owner_id,
+        created_at=shopping_list.created_at,
+        updated_at=shopping_list.updated_at,
+        is_owner=is_owner,
+        items=[ListItemResponse.model_validate(item) for item in items],
+    )
+
+
 # ========== ХЕЛПЕРЫ: регистронезависимый поиск (Python-side) ==========
 # SQLite LOWER() не понимает кириллицу, поэтому фильтруем в Python.
 
@@ -65,14 +78,7 @@ async def create_list(
     await db.commit()
     await db.refresh(new_list)
 
-    return ShoppingListResponse(
-        id=new_list.id,
-        title=new_list.title,
-        owner_id=new_list.owner_id,
-        created_at=new_list.created_at,
-        updated_at=new_list.updated_at,
-        items=[]
-    )
+    return _to_list_response(new_list, is_owner=True, items=[])
 
 
 @router.get("/", response_model=list[ShoppingListResponse])
@@ -82,7 +88,9 @@ async def get_user_lists(
 ):
     """Возвращает ВСЕ списки, доступные пользователю (свои + совместные)."""
     own_result = await db.execute(
-        select(ShoppingList).where(ShoppingList.owner_id == current_user.id)
+        select(ShoppingList)
+        .where(ShoppingList.owner_id == current_user.id)
+        .options(selectinload(ShoppingList.items))
     )
     own_lists = own_result.scalars().all()
 
@@ -90,6 +98,7 @@ async def get_user_lists(
         select(ShoppingList)
         .join(ListMember, ListMember.list_id == ShoppingList.id)
         .where(ListMember.user_id == current_user.id)
+        .options(selectinload(ShoppingList.items))
     )
     shared_lists = shared_result.scalars().all()
 
@@ -101,13 +110,10 @@ async def get_user_lists(
             all_lists_dict[lst.id] = lst
 
     return [
-        ShoppingListResponse(
-            id=item.id,
-            title=item.title,
-            owner_id=item.owner_id,
-            created_at=item.created_at,
-            updated_at=item.updated_at,
-            items=[]
+        _to_list_response(
+            item,
+            is_owner=item.owner_id == current_user.id,
+            items=item.items,
         )
         for item in all_lists_dict.values()
     ]
@@ -144,11 +150,14 @@ async def get_list_by_id(
         .options(selectinload(ShoppingList.items))
     )
     shopping_list = result.scalar_one()
-    return shopping_list
+    return _to_list_response(shopping_list, is_owner=is_owner, items=shopping_list.items)
 
 
 async def check_write_permission(list_id: int, user_id: int, db: AsyncSession) -> bool:
-    """Проверяет, имеет ли пользователь право write для списка."""
+    """Проверяет, может ли пользователь редактировать список.
+
+    Владелец и любой участник списка имеют равные права на редактирование.
+    """
     list_result = await db.execute(
         select(ShoppingList).where(
             ShoppingList.id == list_id,
@@ -161,8 +170,7 @@ async def check_write_permission(list_id: int, user_id: int, db: AsyncSession) -
     member = await db.execute(
         select(ListMember).where(
             ListMember.list_id == list_id,
-            ListMember.user_id == user_id,
-            ListMember.permission == "write"
+            ListMember.user_id == user_id
         )
     )
     return member.scalar_one_or_none() is not None
@@ -175,7 +183,7 @@ async def update_list(
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_active_user)
 ):
-    """Обновляет название списка. Требует права write."""
+    """Обновляет название списка. Доступно владельцу и участникам."""
     if not await check_write_permission(list_id, current_user.id, db):
         raise HTTPException(status_code=403, detail="Not enough permissions")
 
@@ -198,7 +206,11 @@ async def update_list(
         .options(selectinload(ShoppingList.items))
     )
     updated_list = result.scalar_one()
-    return updated_list
+    return _to_list_response(
+        updated_list,
+        is_owner=updated_list.owner_id == current_user.id,
+        items=updated_list.items,
+    )
 
 
 @router.delete("/{list_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -207,10 +219,12 @@ async def delete_list(
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_active_user)
 ):
-    """Удаляет список покупок (вместе со всеми товарами). Требует права write."""
-    if not await check_write_permission(list_id, current_user.id, db):
-        raise HTTPException(status_code=403, detail="Not enough permissions")
+    """Удаляет список покупок.
 
+    Владелец удаляет список для всех (строка уходит каскадом вместе с
+    товарами и участниками). Участник удаляет список только для себя:
+    из его доступа пропадает запись list_members, у остальных список остаётся.
+    """
     result = await db.execute(
         select(ShoppingList).where(ShoppingList.id == list_id)
     )
@@ -218,7 +232,24 @@ async def delete_list(
     if not shopping_list:
         raise HTTPException(status_code=404, detail="List not found")
 
-    await db.delete(shopping_list)
+    if shopping_list.owner_id == current_user.id:
+        # list_items и list_members удаляются каскадом через relationships
+        await db.delete(shopping_list)
+        await db.commit()
+        return
+
+    member_result = await db.execute(
+        select(ListMember).where(
+            ListMember.list_id == list_id,
+            ListMember.user_id == current_user.id
+        )
+    )
+    member = member_result.scalar_one_or_none()
+    if not member:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+
+    # Участник удаляет список только для себя
+    await db.delete(member)
     await db.commit()
 
 
@@ -231,7 +262,7 @@ async def add_item_to_list(
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_active_user)
 ):
-    """Добавляет новый товар в указанный список. Требует права write."""
+    """Добавляет новый товар в указанный список. Доступно владельцу и участникам."""
     if not await check_write_permission(list_id, current_user.id, db):
         raise HTTPException(status_code=403, detail="Not enough permissions")
 
@@ -291,7 +322,7 @@ async def update_item(
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_active_user)
 ):
-    """Обновляет товар. Требует права write."""
+    """Обновляет товар. Доступно владельцу и участникам."""
     result = await db.execute(
         select(ListItem).where(ListItem.id == item_id)
     )
@@ -337,7 +368,7 @@ async def delete_item(
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_active_user)
 ):
-    """Удаляет товар из списка. Требует права write."""
+    """Удаляет товар из списка. Доступно владельцу и участникам."""
     result = await db.execute(
         select(ListItem).where(ListItem.id == item_id)
     )

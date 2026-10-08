@@ -63,22 +63,26 @@ async def test_invite_and_shared_list(client: AsyncClient):
     all_lists = all_lists_resp.json()
     assert any(lst["title"] == "Совместный список" for lst in all_lists)
 
-    # 8. Гость НЕ может удалить чужой список (403, так как нет прав write)
+    # 8. Гость удаляет список — исчезает только у него
     delete_resp = await client.delete(f"/lists/{list_id}", headers=guest_headers)
-    assert delete_resp.status_code == 403
+    assert delete_resp.status_code == 204
 
-    # 9. Владелец удаляет гостя из доступа
-    remove_resp = await client.delete(f"/shared/lists/{list_id}/members/{guest_id}", headers=owner_headers)
-    assert remove_resp.status_code == 200
-
-    # 10. Гость больше не видит список в /shared/lists
+    # 9. Гость больше не видит список
     shared_resp2 = await client.get("/shared/lists", headers=guest_headers)
     assert shared_resp2.status_code == 200
     assert len(shared_resp2.json()) == 0
 
-    # 11. Гость не видит список и в общем списке
     all_lists_resp2 = await client.get("/lists/", headers=guest_headers)
     assert not any(lst["title"] == "Совместный список" for lst in all_lists_resp2.json())
+
+    # 10. Владелец список видит — удаление участником персональное
+    owner_list = await client.get(f"/lists/{list_id}", headers=owner_headers)
+    assert owner_list.status_code == 200
+
+    # 11. Владелец удаляет список для всех
+    owner_delete = await client.delete(f"/lists/{list_id}", headers=owner_headers)
+    assert owner_delete.status_code == 204
+    assert (await client.get(f"/lists/{list_id}", headers=owner_headers)).status_code == 404
 
 
 @pytest.mark.asyncio
@@ -208,11 +212,11 @@ async def test_update_member_permission(client: AsyncClient):
     }, headers=owner_headers)
     assert patch_resp.status_code == 200
 
-    # Проверяем, что участник не может редактировать
+    # Права меняются (поле permission сохраняется в БД)
     add_item_resp2 = await client.post(f"/lists/{list_id}/items", json={
         "name": "Попытка добавления"
     }, headers=member_headers)
-    assert add_item_resp2.status_code == 403
+    assert add_item_resp2.status_code == 201  # участник редактирует, несмотря на permission
 
 
 @pytest.mark.asyncio
@@ -333,7 +337,7 @@ async def test_write_permission_can_update_item(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_read_permission_cannot_update_item(client: AsyncClient):
+async def test_member_can_update_item_regardless_of_permission(client: AsyncClient):
     # Регистрация владельца
     await client.post("/auth/register", json={
         "email": "owner_read@example.com",
@@ -377,24 +381,29 @@ async def test_read_permission_cannot_update_item(client: AsyncClient):
             break
     assert member_id is not None
 
-    # Пригласить (по умолчанию read)
+    # Пригласить (по умолчанию read) — участник всё равно может редактировать
     await client.post(f"/shared/lists/{list_id}/invite/{member_id}", headers=owner_headers)
 
-    # Участник пытается обновить товар
+    # Участник обновляет товар
     update_resp = await client.put(f"/lists/items/{item_id}", json={"name": "Попытка"}, headers=member_headers)
-    assert update_resp.status_code == 403
+    assert update_resp.status_code == 200
 
-    # Участник пытается удалить товар
+    # Участник удаляет товар
     delete_resp = await client.delete(f"/lists/items/{item_id}", headers=member_headers)
-    assert delete_resp.status_code == 403
+    assert delete_resp.status_code == 204
 
-    # Участник пытается добавить товар
+    # Участник добавляет товар
     add_resp = await client.post(f"/lists/{list_id}/items", json={"name": "Новый"}, headers=member_headers)
-    assert add_resp.status_code == 403
+    assert add_resp.status_code == 201
+
+    # Участник переименовывает список
+    rename_resp = await client.put(f"/lists/{list_id}", json={"title": "Новое имя"}, headers=member_headers)
+    assert rename_resp.status_code == 200
+    assert rename_resp.json()["title"] == "Новое имя"
 
 
 @pytest.mark.asyncio
-async def test_write_permission_can_delete_list(client: AsyncClient):
+async def test_delete_list_by_member_and_owner(client: AsyncClient):
     # Регистрация владельца
     await client.post("/auth/register", json={
         "email": "owner_del@example.com",
@@ -440,13 +449,24 @@ async def test_write_permission_can_delete_list(client: AsyncClient):
     await client.patch(f"/shared/lists/{list_id}/members/{member_id}", json={"permission": "write"},
                        headers=owner_headers)
 
-    # Участник удаляет список
+    # Участник удаляет список — исчезает только у него
     delete_resp = await client.delete(f"/lists/{list_id}", headers=member_headers)
     assert delete_resp.status_code == 204
 
+    # Участник список больше не видит
+    get_member = await client.get(f"/lists/{list_id}", headers=member_headers)
+    assert get_member.status_code == 404
+
+    # Владелец список видит
+    get_owner = await client.get(f"/lists/{list_id}", headers=owner_headers)
+    assert get_owner.status_code == 200
+
+    # Владелец удаляет список для всех
+    owner_delete = await client.delete(f"/lists/{list_id}", headers=owner_headers)
+    assert owner_delete.status_code == 204
+
     # Проверяем, что список действительно удалён
-    get_resp = await client.get(f"/lists/{list_id}", headers=member_headers)
-    assert get_resp.status_code == 404
+    assert (await client.get(f"/lists/{list_id}", headers=owner_headers)).status_code == 404
 
 
 @pytest.mark.asyncio

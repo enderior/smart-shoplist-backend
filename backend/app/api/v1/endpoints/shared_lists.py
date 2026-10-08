@@ -1,12 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
+from sqlalchemy.orm import selectinload
 from app.core.database import get_db
 from app.core.dependencies import get_current_active_user
 from app.models.user import User
 from app.models.shopping_list import ShoppingList
 from app.models.list_member import ListMember
-from app.schemas.shopping_list import ShoppingListResponse
+from app.schemas.shopping_list import ShoppingListResponse, ListItemResponse
 from pydantic import BaseModel, EmailStr
 
 router = APIRouter(prefix="/shared", tags=["Shared Lists"])
@@ -110,13 +111,28 @@ async def remove_member(
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_active_user)
 ):
+    """Удаляет участника из списка.
+
+    Владелец может убрать любого участника; участник может выйти из списка
+    сам (user_id == current_user.id). Владелец из списка не выходит —
+    он может удалить его целиком.
+    """
+    is_self_leave = user_id == current_user.id
+
     list_result = await db.execute(
-        select(ShoppingList).where(
-            ShoppingList.id == list_id,
-            ShoppingList.owner_id == current_user.id
-        )
+        select(ShoppingList).where(ShoppingList.id == list_id)
     )
-    if not list_result.scalar_one_or_none():
+    shopping_list = list_result.scalar_one_or_none()
+    if not shopping_list:
+        raise HTTPException(status_code=404, detail="List not found")
+
+    if is_self_leave:
+        if shopping_list.owner_id == current_user.id:
+            raise HTTPException(
+                status_code=400,
+                detail="Владелец не может покинуть список",
+            )
+    elif shopping_list.owner_id != current_user.id:
         raise HTTPException(status_code=404, detail="List not found or you are not owner")
 
     result = await db.execute(
@@ -131,6 +147,8 @@ async def remove_member(
 
     await db.delete(member)
     await db.commit()
+    if is_self_leave:
+        return {"message": "You have left the shared list"}
     return {"message": "User removed from shared access"}
 
 
@@ -197,6 +215,7 @@ async def get_shared_lists(
         select(ShoppingList)
         .join(ListMember, ListMember.list_id == ShoppingList.id)
         .where(ListMember.user_id == current_user.id)
+        .options(selectinload(ShoppingList.items))
     )
     shared_lists = result.scalars().all()
 
@@ -207,7 +226,8 @@ async def get_shared_lists(
             owner_id=item.owner_id,
             created_at=item.created_at,
             updated_at=item.updated_at,
-            items=[]
+            is_owner=item.owner_id == current_user.id,
+            items=[ListItemResponse.model_validate(i) for i in item.items],
         )
         for item in shared_lists
     ]

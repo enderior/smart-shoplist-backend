@@ -15,6 +15,7 @@ class ShoppingList(Base):
 
     owner = relationship("User", backref="shopping_lists")
     items = relationship("ListItem", back_populates="list", cascade="all, delete-orphan")
+    members = relationship("ListMember", back_populates="shopping_list", cascade="all, delete-orphan")
 
 
 class ListItem(Base):

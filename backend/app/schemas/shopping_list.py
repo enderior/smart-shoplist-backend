@@ -48,6 +48,7 @@ class ShoppingListResponse(ShoppingListBase):
     created_at: datetime
     updated_at: Optional[datetime] = None
     items: Optional[List[ListItemResponse]] = None
+    is_owner: bool = False
 
     class Config:
         from_attributes = True
