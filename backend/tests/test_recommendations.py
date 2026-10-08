@@ -131,11 +131,11 @@ async def test_recommendations_with_purchase_history(client: AsyncClient):
     await client.post("/auth/register", json={
         "email": "rec_history@example.com",
         "username": "rechist",
-        "password": "pass"
+        "password": "pass123"
     })
     login_resp = await client.post("/auth/login", data={
         "username": "rec_history@example.com",
-        "password": "pass"
+        "password": "pass123"
     })
     token = login_resp.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
@@ -170,11 +170,11 @@ async def test_recommendations_with_uppercase_names(client: AsyncClient):
     await client.post("/auth/register", json={
         "email": "upper@example.com",
         "username": "upperuser",
-        "password": "pass"
+        "password": "pass123"
     })
     login_resp = await client.post("/auth/login", data={
         "username": "upper@example.com",
-        "password": "pass"
+        "password": "pass123"
     })
     token = login_resp.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}

@@ -8,11 +8,11 @@ async def test_add_item(client: AsyncClient):
     await client.post("/auth/register", json={
         "email": "item@example.com",
         "username": "itemuser",
-        "password": "pass"
+        "password": "pass123"
     })
     login_resp = await client.post("/auth/login", data={
         "username": "item@example.com",
-        "password": "pass"
+        "password": "pass123"
     })
     token = login_resp.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
@@ -41,11 +41,11 @@ async def test_update_item_fields(client: AsyncClient):
     await client.post("/auth/register", json={
         "email": "update_item@example.com",
         "username": "updateitem",
-        "password": "pass"
+        "password": "pass123"
     })
     login_resp = await client.post("/auth/login", data={
         "username": "update_item@example.com",
-        "password": "pass"
+        "password": "pass123"
     })
     token = login_resp.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
@@ -73,11 +73,11 @@ async def test_delete_item(client: AsyncClient):
     await client.post("/auth/register", json={
         "email": "delete_item@example.com",
         "username": "deleteitem",
-        "password": "pass"
+        "password": "pass123"
     })
     login_resp = await client.post("/auth/login", data={
         "username": "delete_item@example.com",
-        "password": "pass"
+        "password": "pass123"
     })
     token = login_resp.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}

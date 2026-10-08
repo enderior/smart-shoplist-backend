@@ -3,10 +3,12 @@ from app.models.shopping_list import ShoppingList, ListItem
 from app.models.purchase_history import PurchaseHistory
 from app.models.list_member import ListMember
 from app.models.password_reset_token import PasswordResetToken
+from app.models.contact_change_token import ContactChangeToken
 from app.models.search_history import SearchHistory
 from app.models.product import Product
 
 __all__ = [
     "User", "ShoppingList", "ListItem", "PurchaseHistory",
-    "ListMember", "PasswordResetToken", "SearchHistory", "Product",
+    "ListMember", "PasswordResetToken", "ContactChangeToken",
+    "SearchHistory", "Product",
 ]

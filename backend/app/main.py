@@ -5,8 +5,11 @@ from fastapi.staticfiles import StaticFiles
 from app.core.config import settings
 from app.core.database import engine
 from app import models  # noqa: F401 — регистрирует все модели в Base.metadata
-from app.api.v1.endpoints import users, auth, lists, recommendations, purchase_history, search, shared_lists
-from fastapi.middleware.cors import CORSMiddleware
+from app.api.v1.endpoints import (
+    users, auth, lists, recommendations,
+    purchase_history, search, shared_lists, contact_change,
+)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -22,23 +25,12 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    # Разрешаем любые источники: авторизация идёт по Bearer-токену (не cookie),
-    # поэтому allow_credentials=False корректно и CORS не блокирует запросы
-    # из браузера независимо от IP/порта фронтенда и смены сети.
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
 # ФИКС #6: создаём папку до mount
 os.makedirs("static", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 app.include_router(users.router)
+app.include_router(contact_change.router)
 app.include_router(lists.router)
 app.include_router(shared_lists.router)
 app.include_router(recommendations.router)

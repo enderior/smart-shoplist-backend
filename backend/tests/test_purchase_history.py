@@ -73,11 +73,11 @@ async def test_purchase_history_pagination(client: AsyncClient):
     await client.post("/auth/register", json={
         "email": "pagin@example.com",
         "username": "paginuser",
-        "password": "pass"
+        "password": "pass123"
     })
     login_resp = await client.post("/auth/login", data={
         "username": "pagin@example.com",
-        "password": "pass"
+        "password": "pass123"
     })
     token = login_resp.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
@@ -118,11 +118,11 @@ async def test_purchase_history_no_duplicates(client: AsyncClient):
     await client.post("/auth/register", json={
         "email": "dedup@example.com",
         "username": "dedupuser",
-        "password": "pass"
+        "password": "pass123"
     })
     login_resp = await client.post("/auth/login", data={
         "username": "dedup@example.com",
-        "password": "pass"
+        "password": "pass123"
     })
     token = login_resp.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
@@ -146,11 +146,11 @@ async def test_purchase_history_written_on_add(client: AsyncClient):
     await client.post("/auth/register", json={
         "email": "addhist@example.com",
         "username": "addhist",
-        "password": "pass"
+        "password": "pass123"
     })
     login_resp = await client.post("/auth/login", data={
         "username": "addhist@example.com",
-        "password": "pass"
+        "password": "pass123"
     })
     token = login_resp.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
@@ -171,11 +171,11 @@ async def test_purchase_history_no_duplicates_case_insensitive(client: AsyncClie
     await client.post("/auth/register", json={
         "email": "case@example.com",
         "username": "caseuser",
-        "password": "pass"
+        "password": "pass123"
     })
     login_resp = await client.post("/auth/login", data={
         "username": "case@example.com",
-        "password": "pass"
+        "password": "pass123"
     })
     token = login_resp.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}

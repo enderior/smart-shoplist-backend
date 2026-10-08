@@ -81,26 +81,15 @@ async def update_user(
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_active_user)
 ):
-    """Обновляет данные текущего пользователя."""
-
-    if user_data.email is not None and user_data.email != current_user.email:
-        existing = await db.execute(select(User).where(User.email == user_data.email))
-        if existing.scalar_one_or_none():
-            raise HTTPException(status_code=400, detail="Email уже используется")
-        current_user.email = user_data.email
-
+    """
+    Обновляет данные профиля: username, birth_date.
+    Для смены email/phone используй /users/me/email/* и /users/me/phone/*.
+    """
     if user_data.username is not None and user_data.username != current_user.username:
         existing = await db.execute(select(User).where(User.username == user_data.username))
         if existing.scalar_one_or_none():
             raise HTTPException(status_code=400, detail="Username уже используется")
         current_user.username = user_data.username
-
-    # ФИКС #8: проверяем уникальность phone
-    if user_data.phone is not None and user_data.phone != current_user.phone:
-        existing = await db.execute(select(User).where(User.phone == user_data.phone))
-        if existing.scalar_one_or_none():
-            raise HTTPException(status_code=400, detail="Телефон уже используется")
-        current_user.phone = user_data.phone
 
     if user_data.birth_date is not None:
         current_user.birth_date = user_data.birth_date
